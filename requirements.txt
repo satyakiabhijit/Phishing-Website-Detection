@@ -1,0 +1,10 @@
+streamlit
+scikit-learn
+xgboost
+lightgbm
+tldextract
+beautifulsoup4
+requests
+python-whois
+dnspython
+joblib
