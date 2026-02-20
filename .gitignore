@@ -15,6 +15,10 @@ build/
 # Trained model files (can be regenerated via training.py)
 models/
 
+# Large dataset files (too large for GitHub)
+data/*.csv
+dataset_phishing.csv
+
 # Logs & temp output
 *.log
 test_results.txt
