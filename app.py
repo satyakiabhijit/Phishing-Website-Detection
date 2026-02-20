@@ -251,11 +251,27 @@ with st.sidebar:
 # ── Load ML Models ────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
 def load_detector():
+    import os, traceback
     from training import PhishingDetector
-    d = PhishingDetector()
-    if d.load_models('models'):
-        return d
-    return None
+    try:
+        d = PhishingDetector()
+        model_dir = 'models'
+        # Surface a clear error if the directory or metadata is missing
+        if not os.path.isdir(model_dir):
+            st.error(f"🔴 `models/` directory not found at `{os.path.abspath(model_dir)}`. "
+                     "Ensure model files are committed to the repository.", icon="🔴")
+            return None
+        meta_path = os.path.join(model_dir, 'metadata.json')
+        if not os.path.exists(meta_path):
+            st.error(f"🔴 `models/metadata.json` not found. Run `python training.py` to regenerate.", icon="🔴")
+            return None
+        if d.load_models(model_dir):
+            return d
+        st.error("🔴 `load_models()` returned False — check logs for details.", icon="🔴")
+        return None
+    except Exception as exc:
+        st.error(f"🔴 Failed to load ML models: `{exc}`\n\n```\n{traceback.format_exc()}\n```", icon="🔴")
+        return None
 
 
 # ── Header ────────────────────────────────────────────────────────────────────
