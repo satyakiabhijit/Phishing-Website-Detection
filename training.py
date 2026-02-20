@@ -410,7 +410,7 @@ class PhishingDetector:
             return True
         except Exception as e:
             logger.error(f"Error loading models: {e}")
-            return False
+            raise  # re-raise so callers can display the real error
 
     def predict(self, features_df: pd.DataFrame, return_details: bool = False, url: str = None) -> Dict[str, Any]:
         """Make prediction using ensemble. Input: raw features dict/DataFrame."""
