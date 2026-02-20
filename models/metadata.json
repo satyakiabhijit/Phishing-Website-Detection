@@ -1,0 +1,257 @@
+{
+  "feature_names": [
+    "length_url",
+    "length_hostname",
+    "ip",
+    "nb_dots",
+    "nb_hyphens",
+    "nb_at",
+    "nb_qm",
+    "nb_and",
+    "nb_or",
+    "nb_eq",
+    "nb_underscore",
+    "nb_tilde",
+    "nb_percent",
+    "nb_slash",
+    "nb_star",
+    "nb_colon",
+    "nb_comma",
+    "nb_semicolumn",
+    "nb_dollar",
+    "nb_space",
+    "nb_dslash",
+    "http_in_path",
+    "https_token",
+    "ratio_digits_url",
+    "ratio_digits_host",
+    "punycode",
+    "port",
+    "tld_in_path",
+    "tld_in_subdomain",
+    "abnormal_subdomain",
+    "nb_subdomains",
+    "prefix_suffix",
+    "random_domain",
+    "shortening_service",
+    "path_extension",
+    "nb_redirection",
+    "nb_external_redirection",
+    "length_words_raw",
+    "char_repeat",
+    "shortest_words_raw",
+    "longest_words_raw",
+    "longest_word_host",
+    "longest_word_path",
+    "avg_words_raw",
+    "avg_word_host",
+    "avg_word_path",
+    "phish_hints",
+    "domain_in_brand",
+    "brand_in_subdomain",
+    "brand_in_path",
+    "suspecious_tld",
+    "statistical_report",
+    "typosquatting_score",
+    "domain_perplexity_score",
+    "homoglyph_score",
+    "domain_entropy_score",
+    "has_uuid_in_path"
+  ],
+  "selected_features": [
+    "avg_word_path",
+    "nb_external_redirection",
+    "statistical_report",
+    "nb_semicolumn",
+    "prefix_suffix",
+    "http_in_path",
+    "avg_word_host",
+    "longest_word_host",
+    "longest_words_raw",
+    "length_url_x_nb_dots",
+    "length_words_raw",
+    "suspecious_tld",
+    "length_url_x_nb_hyphens",
+    "abnormal_subdomain",
+    "homoglyph_score",
+    "domain_entropy_score",
+    "random_domain",
+    "phish_hints",
+    "avg_words_raw",
+    "domain_in_brand",
+    "nb_dots",
+    "nb_subdomains",
+    "ratio_digits_url",
+    "dots_x_hyphens",
+    "port",
+    "nb_slash",
+    "nb_space",
+    "ip",
+    "brand_in_path",
+    "domain_perplexity_score",
+    "nb_tilde",
+    "tld_in_path",
+    "nb_redirection",
+    "https_token",
+    "ratio_digits_host",
+    "nb_colon",
+    "tld_in_subdomain",
+    "nb_at",
+    "length_url",
+    "nb_hyphens",
+    "typosquatting_score",
+    "nb_qm",
+    "nb_and",
+    "nb_eq",
+    "shortening_service",
+    "length_url_div_nb_slash",
+    "shortest_words_raw",
+    "length_hostname",
+    "length_url_div_nb_dots",
+    "brand_in_subdomain"
+  ],
+  "training_history": {
+    "random_forest": {
+      "cv_mean": 0.9996291834582051,
+      "cv_std": 2.5090320006702254e-05,
+      "training_time": 58.25186538696289
+    },
+    "gradient_boosting": {
+      "cv_mean": 0.9996170645704329,
+      "cv_std": 3.339787438789041e-05,
+      "training_time": 246.45564579963684
+    },
+    "extra_trees": {
+      "cv_mean": 0.9992085351316874,
+      "cv_std": 3.196043028366512e-05,
+      "training_time": 35.760926485061646
+    },
+    "logistic_regression": {
+      "cv_mean": 0.9977582881060085,
+      "cv_std": 0.00026353096805437716,
+      "training_time": 1.2760517597198486
+    },
+    "svm": {
+      "cv_mean": 0.9985871346487178,
+      "cv_std": 0.0002971089042162025,
+      "training_time": 397.2792332172394
+    },
+    "neural_network": {
+      "cv_mean": 0.9992656544937436,
+      "cv_std": 0.0001694119628383884,
+      "training_time": 197.99455165863037
+    },
+    "naive_bayes": {
+      "cv_mean": 0.9917188658352378,
+      "cv_std": 0.000517306195026544,
+      "training_time": 0.3581554889678955
+    },
+    "knn": {
+      "cv_mean": 0.9962917970285596,
+      "cv_std": 0.0004922514896407131,
+      "training_time": 4.873113393783569
+    },
+    "decision_tree": {
+      "cv_mean": 0.9891658511113459,
+      "cv_std": 0.0012927031993643806,
+      "training_time": 1.905311107635498
+    },
+    "xgboost": {
+      "cv_mean": 0.9996192708443694,
+      "cv_std": 3.137033821957402e-05,
+      "training_time": 4.097877025604248
+    },
+    "lightgbm": {
+      "cv_mean": 0.9995919580539583,
+      "cv_std": 1.8271531803611285e-05,
+      "training_time": 3.3480377197265625
+    }
+  },
+  "model_performances": {
+    "random_forest": {
+      "accuracy": 0.99,
+      "precision": 0.9941319303925537,
+      "recall": 0.9857544141252006,
+      "f1": 0.9899254483175499,
+      "auc": 0.9995771756702789
+    },
+    "gradient_boosting": {
+      "accuracy": 0.991,
+      "precision": 0.9927507047925896,
+      "recall": 0.9891653290529695,
+      "f1": 0.9909547738693467,
+      "auc": 0.9996151360589931
+    },
+    "extra_trees": {
+      "accuracy": 0.9829,
+      "precision": 0.9956745623069001,
+      "recall": 0.9699036918138042,
+      "f1": 0.9826201849781482,
+      "auc": 0.9991141709291103
+    },
+    "logistic_regression": {
+      "accuracy": 0.9793,
+      "precision": 0.9863571574017511,
+      "recall": 0.9719101123595506,
+      "f1": 0.9790803436078828,
+      "auc": 0.9974097934762851
+    },
+    "svm": {
+      "accuracy": 0.9858,
+      "precision": 0.9875151026983487,
+      "recall": 0.9839486356340289,
+      "f1": 0.9857286432160804,
+      "auc": 0.9988921686558069
+    },
+    "neural_network": {
+      "accuracy": 0.9909,
+      "precision": 0.9915611814345991,
+      "recall": 0.9901685393258427,
+      "f1": 0.9908643710470836,
+      "auc": 0.9991915717216944
+    },
+    "naive_bayes": {
+      "accuracy": 0.9704,
+      "precision": 0.9850993377483444,
+      "recall": 0.9550561797752809,
+      "f1": 0.9698451507742462,
+      "auc": 0.991746575484933
+    },
+    "knn": {
+      "accuracy": 0.9854,
+      "precision": 0.9896761133603239,
+      "recall": 0.9809390048154093,
+      "f1": 0.9852881902458686,
+      "auc": 0.9962509016092325
+    },
+    "decision_tree": {
+      "accuracy": 0.9794,
+      "precision": 0.9879493464052288,
+      "recall": 0.9705056179775281,
+      "f1": 0.9791497975708502,
+      "auc": 0.9897988755404855
+    },
+    "xgboost": {
+      "accuracy": 0.9915,
+      "precision": 0.9939503932244405,
+      "recall": 0.9889646869983949,
+      "f1": 0.9914512722518355,
+      "auc": 0.9996093960002151
+    },
+    "lightgbm": {
+      "accuracy": 0.9905,
+      "precision": 0.9935392691298203,
+      "recall": 0.9873595505617978,
+      "f1": 0.9904397705544933,
+      "auc": 0.9995942158447703
+    },
+    "stacking_ensemble": {
+      "accuracy": 0.9907,
+      "precision": 0.9933427476296147,
+      "recall": 0.9879614767255217,
+      "f1": 0.9906448043456393,
+      "auc": 0.9996118160249962
+    }
+  },
+  "timestamp": "2026-02-20T21:06:57.039348"
+}
