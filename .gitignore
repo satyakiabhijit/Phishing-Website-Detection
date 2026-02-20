@@ -1,0 +1,36 @@
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Trained model files (can be regenerated via training.py)
+models/
+
+# Logs & temp output
+*.log
+test_results.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env / Secrets (NEVER commit these)
+.env
+.env.local
+.streamlit/secrets.toml
+API.txt

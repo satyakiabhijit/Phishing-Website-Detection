@@ -1,1110 +1,584 @@
-import pandas as pd
+"""
+PhishGuard ML Training Pipeline — Layer 3: URL-Structural + Mathematical Models
+Trains on only features that are ALWAYS available at inference time.
+"""
+
+import os
+import sys
+import time
+import json
+import logging
+import warnings
+from datetime import datetime
+from typing import Dict, Any
+
 import numpy as np
-import re
-import urllib.parse
-from urllib.parse import urlparse, parse_qs
-import tldextract
-import pickle
-import joblib
-import requests
-from bs4 import BeautifulSoup
-import socket
-import ssl
-import whois
-from datetime import datetime, timedelta
-import dns.resolver
-import hashlib
-import base64
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, VotingClassifier
+import pandas as pd
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.feature_selection import SelectKBest, f_classif, SelectFromModel
+from sklearn.ensemble import (
+    RandomForestClassifier, GradientBoostingClassifier,
+    ExtraTreesClassifier, StackingClassifier, IsolationForest
+)
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
-from sklearn.metrics import classification_report, accuracy_score, confusion_matrix, roc_auc_score
-from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier
-import xgboost as xgb
-import lightgbm as lgb
-import warnings
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score, f1_score, roc_auc_score
+)
+import joblib
+
+try:
+    import xgboost as xgb
+    HAS_XGB = True
+except ImportError:
+    HAS_XGB = False
+
+try:
+    import lightgbm as lgb
+    HAS_LGB = True
+except ImportError:
+    HAS_LGB = False
 
 warnings.filterwarnings('ignore')
 
-
-class AdvancedPhishingDetector:
-    def __init__(self):
-        self.scaler = StandardScaler()
-        self.models = {}
-        self.ensemble_model = None
-
-        # Comprehensive threat intelligence
-        self.suspicious_keywords = [
-            'login', 'secure', 'account', 'update', 'verify', 'suspended', 'limited',
-            'confirm', 'click', 'here', 'now', 'urgent', 'expire', 'paypal', 'amazon',
-            'apple', 'microsoft', 'google', 'facebook', 'bank', 'credit', 'card',
-            'password', 'signin', 'outlook', 'netflix', 'spotify', 'instagram',
-            'twitter', 'linkedin', 'ebay', 'walmart', 'target', 'costco', 'adobe',
-            'dropbox', 'icloud', 'onedrive', 'chase', 'wellsfargo', 'citibank',
-            'americanexpress', 'visa', 'mastercard', 'discover', 'cryptocurrency',
-            'bitcoin', 'ethereum', 'blockchain', 'wallet', 'investment', 'trading'
-        ]
-
-        self.phishing_patterns = [
-            r'[\w\.-]+\.(tk|ml|ga|cf|gq)',  # Suspicious TLDs
-            r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}',  # IP addresses
-            r'[a-z0-9]+-[a-z0-9]+-[a-z0-9]+\.',  # Hyphenated subdomains
-            r'www\d+\.',  # Numbered www
-            r'secure[a-z0-9]*\.',  # Secure variations
-            r'[a-z]+(\.|-)[a-z]+(\.|-)[a-z]+\.(com|net|org)',  # Multi-level domains
-        ]
-
-        self.legitimate_domains = {
-            'google.com', 'facebook.com', 'amazon.com', 'microsoft.com', 'apple.com',
-            'paypal.com', 'ebay.com', 'twitter.com', 'instagram.com', 'linkedin.com',
-            'netflix.com', 'spotify.com', 'adobe.com', 'dropbox.com', 'github.com',
-            'stackoverflow.com', 'reddit.com', 'wikipedia.org', 'youtube.com'
-        }
-
-    def _calculate_entropy(self, text):
-        """Calculate Shannon entropy of text"""
-        if not text:
-            return 0
-        prob = [float(text.count(c)) / len(text) for c in dict.fromkeys(list(text))]
-        entropy = -sum([p * np.log2(p) for p in prob])
-        return entropy
-
-    def _has_custom_port(self, netloc):
-        """Check if URL has custom port"""
-        return ':' in netloc and not netloc.endswith(':80') and not netloc.endswith(':443')
-
-    def _extract_port(self, netloc):
-        """Extract port number from netloc"""
-        if ':' in netloc:
-            try:
-                return int(netloc.split(':')[-1])
-            except ValueError:
-                return 80
-        return 80
-
-    def _detect_brand_impersonation(self, domain):
-        """Detect brand impersonation attempts"""
-        score = 0
-        for brand in self.legitimate_domains:
-            brand_name = brand.split('.')[0]
-            if brand_name in domain and domain != brand:
-                score += 1
-        return score
-
-    def _detect_homograph_attack(self, domain):
-        """Detect homograph/IDN attacks"""
-        suspicious_chars = ['а', 'е', 'о', 'р', 'с', 'у', 'х']  # Cyrillic look-alikes
-        return sum(1 for char in domain if char in suspicious_chars)
-
-    def _is_ip_address(self, domain):
-        """Check if domain is an IP address"""
-        try:
-            socket.inet_aton(domain)
-            return True
-        except socket.error:
-            return False
-
-    def _is_url_shortener(self, domain):
-        """Check if domain is a URL shortener"""
-        shorteners = ['bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'short.link']
-        return domain in shorteners
-
-    def _vowel_consonant_ratio(self, text):
-        """Calculate vowel to consonant ratio"""
-        if not text:
-            return 0
-        vowels = sum(1 for c in text.lower() if c in 'aeiou')
-        consonants = sum(1 for c in text.lower() if c.isalpha() and c not in 'aeiou')
-        return vowels / consonants if consonants > 0 else 0
-
-    def _longest_word_length(self, text):
-        """Find longest word in domain"""
-        words = re.findall(r'[a-zA-Z]+', text)
-        return max(len(word) for word in words) if words else 0
-
-    def _avg_word_length(self, text):
-        """Calculate average word length"""
-        words = re.findall(r'[a-zA-Z]+', text)
-        return sum(len(word) for word in words) / len(words) if words else 0
-
-    def _extract_network_features(self, url, domain):
-        """Extract network-based features"""
-        features = {}
-
-        try:
-            # Response time analysis
-            start_time = datetime.now()
-            response = requests.get(url, timeout=10, allow_redirects=True)
-            response_time = (datetime.now() - start_time).total_seconds()
-
-            features['response_time'] = response_time
-            features['status_code'] = response.status_code
-            features['redirect_count'] = len(response.history)
-            features['final_url_different'] = 1 if response.url != url else 0
-
-            # Content length and type
-            features['content_length'] = len(response.content)
-            features['content_type'] = 1 if 'text/html' in response.headers.get('content-type', '') else 0
-
-        except requests.exceptions.RequestException:
-            features['response_time'] = -1
-            features['status_code'] = -1
-            features['redirect_count'] = 0
-            features['final_url_different'] = 0
-            features['content_length'] = 0
-            features['content_type'] = 0
-
-        return features
-
-    def _extract_content_features(self, url):
-        """Extract HTML content-based features"""
-        features = {}
-
-        try:
-            response = requests.get(url, timeout=10)
-            soup = BeautifulSoup(response.content, 'html.parser')
-
-            # HTML structure analysis
-            features['form_count'] = len(soup.find_all('form'))
-            features['input_count'] = len(soup.find_all('input'))
-            features['password_field_count'] = len(soup.find_all('input', {'type': 'password'}))
-            features['hidden_field_count'] = len(soup.find_all('input', {'type': 'hidden'}))
-
-            # Link analysis
-            links = soup.find_all('a', href=True)
-            features['external_link_count'] = sum(1 for link in links
-                                                  if urlparse(link['href']).netloc and not urlparse(link['href']).netloc.endswith(urlparse(url).netloc))
-            features['total_link_count'] = len(links)
-
-            # Image analysis
-            images = soup.find_all('img')
-            features['image_count'] = len(images)
-            features['external_image_count'] = sum(1 for img in images
-                                                   if img.get('src') and urlparse(img['src']).netloc and not urlparse(img['src']).netloc.endswith(
-                urlparse(url).netloc))
-
-            # Script analysis
-            scripts = soup.find_all('script')
-            features['script_count'] = len(scripts)
-            features['external_script_count'] = sum(1 for script in scripts
-                                                    if script.get('src') and urlparse(script['src']).netloc and not urlparse(script['src']).netloc.endswith(
-                urlparse(url).netloc))
-
-            # Content analysis
-            text_content = soup.get_text().lower()
-            features['page_text_length'] = len(text_content)
-            features['suspicious_text_count'] = sum(1 for keyword in self.suspicious_keywords
-                                                    if keyword in text_content)
-
-            # Meta tag analysis
-            features['has_favicon'] = 1 if soup.find('link', rel='icon') or soup.find('link', rel='shortcut icon') else 0
-            features['has_title'] = 1 if soup.find('title') else 0
-            features['title_length'] = len(soup.find('title').get_text()) if soup.find('title') else 0
-
-        except requests.exceptions.RequestException:
-            # Default values for content features
-            features.update({
-                'form_count': 0, 'input_count': 0, 'password_field_count': 0,
-                'hidden_field_count': 0, 'external_link_count': 0, 'total_link_count': 0,
-                'image_count': 0, 'external_image_count': 0, 'script_count': 0,
-                'external_script_count': 0, 'page_text_length': 0, 'suspicious_text_count': 0,
-                'has_favicon': 0, 'has_title': 0, 'title_length': 0
-            })
-
-        return features
-
-    def _extract_certificate_features(self, url):
-        """Extract SSL certificate features"""
-        features = {}
-
-        try:
-            if url.startswith('https://'):
-                hostname = urlparse(url).netloc
-                context = ssl.create_default_context()
-
-                with socket.create_connection((hostname, 443), timeout=10) as sock:
-                    with context.wrap_socket(sock, server_hostname=hostname) as ssock:
-                        cert = ssock.getpeercert()
-
-                        # Certificate validity
-                        not_after = datetime.strptime(cert['notAfter'], '%b %d %H:%M:%S %Y %Z')
-                        not_before = datetime.strptime(cert['notBefore'], '%b %d %H:%M:%S %Y %Z')
-
-                        features['cert_days_until_expiry'] = (not_after - datetime.now()).days
-                        features['cert_age_days'] = (datetime.now() - not_before).days
-                        features['cert_is_expired'] = 1 if not_after < datetime.now() else 0
-                        features['cert_is_self_signed'] = 1 if cert['issuer'] == cert['subject'] else 0
-
-                        # Certificate issuer analysis
-                        issuer = dict(x[0] for x in cert['issuer'])
-                        trusted_cas = ['DigiCert', 'Let\'s Encrypt', 'Comodo', 'GeoTrust', 'Symantec']
-                        features['cert_trusted_ca'] = 1 if any(
-                            ca in issuer.get('organizationName', '') for ca in trusted_cas) else 0
-            else:
-                features.update({
-                    'cert_days_until_expiry': -1, 'cert_age_days': -1,
-                    'cert_is_expired': 0, 'cert_is_self_signed': 0, 'cert_trusted_ca': 0
-                })
-
-        except (socket.error, ssl.SSLError, ssl.CertificateError, ValueError):
-            features.update({
-                'cert_days_until_expiry': -1, 'cert_age_days': -1,
-                'cert_is_expired': 0, 'cert_is_self_signed': 0, 'cert_trusted_ca': 0
-            })
-
-        return features
-
-    def _extract_whois_features(self, domain):
-        """Extract WHOIS-based features"""
-        features = {}
-
-        try:
-            w = whois.whois(domain)
-
-            # Domain age
-            creation_date = w.creation_date
-            if isinstance(creation_date, list):
-                creation_date = creation_date[0]
-
-            if creation_date and isinstance(creation_date, datetime):
-                features['domain_age_days'] = (datetime.now() - creation_date).days
-                features['domain_age_months'] = features['domain_age_days'] / 30
-            else:
-                features['domain_age_days'] = -1
-                features['domain_age_months'] = -1
-
-            # Expiration date
-            expiration_date = w.expiration_date
-            if isinstance(expiration_date, list):
-                expiration_date = expiration_date[0]
-
-            if expiration_date and isinstance(expiration_date, datetime):
-                features['domain_expires_in_days'] = (expiration_date - datetime.now()).days
-            else:
-                features['domain_expires_in_days'] = -1
-
-            # Registrar information
-            features['has_registrar_info'] = 1 if w.registrar else 0
-            features['has_registrant_info'] = 1 if w.registrant else 0
-
-        except Exception:
-            features.update({
-                'domain_age_days': -1, 'domain_age_months': -1,
-                'domain_expires_in_days': -1, 'has_registrar_info': 0,
-                'has_registrant_info': 0
-            })
-
-        return features
-
-    def _extract_dns_features(self, domain):
-        """Extract DNS-based features"""
-        features = {}
-
-        try:
-            # A record count
-            a_records = dns.resolver.resolve(domain, 'A')
-            features['a_record_count'] = len(a_records)
-
-            # MX record existence
-            try:
-                mx_records = dns.resolver.resolve(domain, 'MX')
-                features['has_mx_record'] = 1
-                features['mx_record_count'] = len(mx_records)
-            except dns.resolver.NXDOMAIN:
-                features['has_mx_record'] = 0
-                features['mx_record_count'] = 0
-
-            # NS record count
-            try:
-                ns_records = dns.resolver.resolve(domain, 'NS')
-                features['ns_record_count'] = len(ns_records)
-            except dns.resolver.NXDOMAIN:
-                features['ns_record_count'] = 0
-
-        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer, dns.resolver.NoNameservers, dns.exception.Timeout):
-            features.update({
-                'a_record_count': 0, 'has_mx_record': 0,
-                'mx_record_count': 0, 'ns_record_count': 0
-            })
-
-        return features
-
-    def _fill_default_network_features(self, features):
-        """Fill default values for network features when not fetching content"""
-        default_features = {
-            'response_time': -1, 'status_code': -1, 'redirect_count': 0,
-            'final_url_different': 0, 'content_length': 0, 'content_type': 0,
-            'form_count': 0, 'input_count': 0, 'password_field_count': 0,
-            'hidden_field_count': 0, 'external_link_count': 0, 'total_link_count': 0,
-            'image_count': 0, 'external_image_count': 0, 'script_count': 0,
-            'external_script_count': 0, 'page_text_length': 0, 'suspicious_text_count': 0,
-            'has_favicon': 0, 'has_title': 0, 'title_length': 0,
-            'cert_days_until_expiry': -1, 'cert_age_days': -1,
-            'cert_is_expired': 0, 'cert_is_self_signed': 0, 'cert_trusted_ca': 0,
-            'domain_age_days': -1, 'domain_age_months': -1,
-            'domain_expires_in_days': -1, 'has_registrar_info': 0,
-            'has_registrant_info': 0, 'a_record_count': 0, 'has_mx_record': 0,
-            'mx_record_count': 0, 'ns_record_count': 0
-        }
-        features.update(default_features)
-
-    def _get_default_features(self):
-        """Return default feature set when extraction fails"""
-        return {
-            'url_length': 0, 'domain_length': 0, 'path_length': 0,
-            'query_length': 0, 'fragment_length': 0, 'url_entropy': 0,
-            'domain_entropy': 0, 'path_entropy': 0, 'url_digit_ratio': 0,
-            'url_special_char_ratio': 0, 'domain_digit_ratio': 0,
-            'subdomain_count': 0, 'is_subdomain': 0, 'has_www': 0,
-            'domain_has_dash': 0, 'domain_has_numbers': 0, 'is_suspicious_tld': 0,
-            'tld_length': 0, 'is_country_tld': 0, 'is_https': 0,
-            'has_port': 0, 'port_number': 80, 'matches_phishing_pattern': 0,
-            'suspicious_keyword_count': 0, 'brand_impersonation_score': 0,
-            'homograph_attack_score': 0, 'has_redirect_params': 0,
-            'query_param_count': 0, 'is_ip_address': 0, 'has_punycode': 0,
-            'url_shortener': 0, 'vowel_consonant_ratio': 0,
-            'longest_word_length': 0, 'avg_word_length': 0
-        }
-
-    def extract_comprehensive_features(self, url, fetch_content=True):
-        """Extract 100+ advanced features from URL and content"""
-        features = {}
-
-        try:
-            parsed = urlparse(url)
-            extracted = tldextract.extract(url)
-            domain = parsed.netloc.lower()
-
-            # === URL STRUCTURE FEATURES ===
-            features['url_length'] = len(url)
-            features['domain_length'] = len(domain)
-            features['path_length'] = len(parsed.path)
-            features['query_length'] = len(parsed.query) if parsed.query else 0
-            features['fragment_length'] = len(parsed.fragment) if parsed.fragment else 0
-
-            # URL composition analysis
-            features['url_entropy'] = self._calculate_entropy(url)
-            features['domain_entropy'] = self._calculate_entropy(domain)
-            features['path_entropy'] = self._calculate_entropy(parsed.path)
-
-            # Character analysis
-            features['url_digit_ratio'] = sum(c.isdigit() for c in url) / len(url) if url else 0
-            features['url_special_char_ratio'] = sum(not c.isalnum() for c in url) / len(url) if url else 0
-            features['domain_digit_ratio'] = sum(c.isdigit() for c in domain) / len(domain) if domain else 0
-
-            # === DOMAIN FEATURES ===
-            features['subdomain_count'] = len(extracted.subdomain.split('.')) if extracted.subdomain else 0
-            features['is_subdomain'] = 1 if extracted.subdomain else 0
-            features['has_www'] = 1 if domain.startswith('www.') else 0
-            features['domain_has_dash'] = 1 if '-' in extracted.domain else 0
-            features['domain_has_numbers'] = 1 if any(c.isdigit() for c in extracted.domain) else 0
-
-            # TLD analysis
-            features['is_suspicious_tld'] = 1 if extracted.suffix in ['tk', 'ml', 'ga', 'cf', 'gq'] else 0
-            features['tld_length'] = len(extracted.suffix) if extracted.suffix else 0
-            features['is_country_tld'] = 1 if len(extracted.suffix) == 2 else 0
-
-            # === SECURITY FEATURES ===
-            features['is_https'] = 1 if parsed.scheme == 'https' else 0
-            features['has_port'] = 1 if self._has_custom_port(parsed.netloc) else 0
-            features['port_number'] = self._extract_port(parsed.netloc)
-
-            # === SUSPICIOUS PATTERNS ===
-            features['matches_phishing_pattern'] = sum(1 for pattern in self.phishing_patterns
-                                                       if re.search(pattern, url, re.IGNORECASE))
-            features['suspicious_keyword_count'] = sum(1 for keyword in self.suspicious_keywords
-                                                       if keyword in url.lower())
-
-            # Brand impersonation detection
-            features['brand_impersonation_score'] = self._detect_brand_impersonation(domain)
-            features['homograph_attack_score'] = self._detect_homograph_attack(domain)
-
-            # === URL REDIRECTION FEATURES ===
-            features['has_redirect_params'] = 1 if any(param in parsed.query.lower()
-                                                       for param in ['redirect', 'url', 'link', 'goto']) else 0
-            features['query_param_count'] = len(parse_qs(parsed.query))
-
-            # === ADVANCED PATTERN MATCHING ===
-            features['is_ip_address'] = 1 if self._is_ip_address(domain) else 0
-            features['has_punycode'] = 1 if 'xn--' in domain else 0
-            features['url_shortener'] = 1 if self._is_url_shortener(domain) else 0
-
-            # === LEXICAL FEATURES ===
-            features['vowel_consonant_ratio'] = self._vowel_consonant_ratio(extracted.domain)
-            features['longest_word_length'] = self._longest_word_length(extracted.domain)
-            features['avg_word_length'] = self._avg_word_length(extracted.domain)
-
-            # === NETWORK FEATURES ===
-            if fetch_content:
-                network_features = self._extract_network_features(url, domain)
-                features.update(network_features)
-
-                # Content-based features
-                content_features = self._extract_content_features(url)
-                features.update(content_features)
-
-                # Certificate features
-                cert_features = self._extract_certificate_features(url)
-                features.update(cert_features)
-
-                # WHOIS features
-                whois_features = self._extract_whois_features(domain)
-                features.update(whois_features)
-
-                # DNS features
-                dns_features = self._extract_dns_features(domain)
-                features.update(dns_features)
-            else:
-                # Fill with default values when not fetching content
-                self._fill_default_network_features(features)
-            return features
-
-        except Exception as e:
-            print(f"Error extracting features from {url}: {str(e)}")
-            return self._get_default_features() # Return default features on error
-
-    def _get_risk_level(self, phishing_prob):
-        """Determine risk level based on phishing probability"""
-        if phishing_prob >= 0.8:
-            return 'Very High'
-        elif phishing_prob >= 0.6:
-            return 'High'
-        elif phishing_prob >= 0.4:
-            return 'Medium'
-        elif phishing_prob >= 0.2:
-            return 'Low'
-        else:
-            return 'Very Low'
-
-    def _get_suspicious_indicators(self, features):
-        """Identify suspicious indicators from features"""
-        indicators = []
-
-        if features.get('url_length', 0) > 100:
-            indicators.append("Unusually long URL")
-
-        if features.get('subdomain_count', 0) > 3:
-            indicators.append("Multiple subdomains")
-
-        if features.get('is_ip_address', 0) == 1:
-            indicators.append("Uses IP address instead of domain")
-
-        if features.get('suspicious_keyword_count', 0) > 2:
-            indicators.append("Contains multiple suspicious keywords")
-
-        if features.get('brand_impersonation_score', 0) > 0:
-            indicators.append("Potential brand impersonation")
-
-        if features.get('is_https', 0) == 0:
-            indicators.append("Not using HTTPS")
-
-        if features.get('is_suspicious_tld', 0) == 1:
-            indicators.append("Uses suspicious top-level domain")
-
-        if features.get('domain_age_days', -1) != -1 and features.get('domain_age_days', -1) < 30:
-            indicators.append("Very new domain (less than 30 days)")
-
-        if features.get('cert_is_self_signed', 0) == 1:
-            indicators.append("Self-signed SSL certificate")
-
-        if features.get('redirect_count', 0) > 3:
-            indicators.append("Multiple redirects")
-
-        return indicators
-
-    def batch_predict(self, urls):
-        """Predict multiple URLs efficiently"""
-        results = []
-
-        for url in urls:
-            try:
-                result = self.predict_single_url(url, detailed=False)
-                results.append(result)
-            except Exception as e:
-                results.append({
-                    'url': url,
-                    'prediction': 'Error',
-                    'error': str(e)
-                })
-
-        return results
-
-    def save_models(self, model_dir='models'):
-        """Save all trained models and scaler"""
-        import os
-        os.makedirs(model_dir, exist_ok=True)
-
-        # Save scaler
-        joblib.dump(self.scaler, f'{model_dir}/scaler.pkl')
-
-        # Save individual models
-        for name, model in self.models.items():
-            joblib.dump(model, f'{model_dir}/{name}_model.pkl')
-
-        # Save ensemble model
-        if self.ensemble_model:
-            joblib.dump(self.ensemble_model, f'{model_dir}/ensemble_model.pkl')
-
-        print(f"Models saved to {model_dir}/")
-
-    def load_models(self, model_dir='models'):
-        """Load all trained models and scaler"""
-        try:
-            # Load scaler
-            self.scaler = joblib.load(f'{model_dir}/scaler.pkl')
-
-            # Load individual models
-            model_names = ['random_forest', 'gradient_boosting', 'xgboost', 'lightgbm',
-                           'logistic_regression', 'svm', 'neural_network']
-
-            for name in model_names:
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[logging.FileHandler('training.log'), logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
+
+# Features that cannot be reliably measured at inference time
+# Training drops these so the model never relies on unavailable data
+_UNRELIABLE_COLS = [
+    # External API features
+    'page_rank', 'domain_age', 'google_index', 'web_traffic',
+    'whois_registered_domain', 'domain_registration_length', 'dns_record',
+    # HTML content features (many sites block bots / require auth)
+    'nb_hyperlinks', 'ratio_intHyperlinks', 'ratio_extHyperlinks',
+    'ratio_nullHyperlinks', 'nb_extCSS', 'ratio_intRedirection',
+    'ratio_extRedirection', 'ratio_intErrors', 'ratio_extErrors',
+    'login_form', 'external_favicon', 'links_in_tags', 'submit_email',
+    'ratio_intMedia', 'ratio_extMedia', 'sfh', 'iframe',
+    'popup_window', 'safe_anchor', 'onmouseover', 'right_clic',
+    'empty_title', 'domain_in_title', 'domain_with_copyright',
+    # Misleading count features — equally common in legitimate and phishing URLs,
+    # leading to false positives on real sites like github.com, google.com etc.
+    'nb_com',   # counts 'com' in URL — legitimate .com sites naturally score 1
+    'nb_www',   # counts 'www' in URL — legitimate canonical domains score 1
+    # Word-length features — misleading due to TLD segments
+    # shortest_word_host for github.com = 3 ('com' TLD) which is identical for ALL .com sites
+    # This trains the model to flag all short-segment hostnames incorrectly
+    'shortest_word_host',
+    'shortest_word_path',
+]
+
+
+class PhishingDetector:
+    """ML-based phishing URL detector — Layer 3 of the 4-layer fusion pipeline."""
+
+    def __init__(self, random_state: int = 42):
+        self.random_state = random_state
+        np.random.seed(random_state)
+
+        self.models             = {}
+        self.stacking_classifier = None
+        self.anomaly_detector   = None
+        self.scaler             = StandardScaler()
+        self.label_encoder      = LabelEncoder()
+        self.feature_names      = None
+        self.selected_features  = None
+        self.training_history   = {}
+        self.model_performances = {}
+
+        logger.info("PhishingDetector initialized")
+
+    # ── Data Loading ─────────────────────────────────────────────────────────
+
+    def load_dataset(self, path: str) -> pd.DataFrame:
+        logger.info(f"Loading dataset from {path}")
+        df = pd.read_csv(path)
+        logger.info(f"Raw shape: {df.shape}")
+        logger.info(f"Classes:\n{df['status'].value_counts()}")
+
+        # ── AUGMENT with math features computed from URL ───────────────────
+        # This is the KEY step: train the model on the SAME feature space
+        # it will see at inference time — including typosquatting scores,
+        # n-gram perplexity, homoglyph detection, and Shannon entropy.
+        # Without this, these features fill to 0 at inference → model ignores them.
+        if 'url' in df.columns:
+            logger.info("Computing mathematical features from URL column...")
+            from feature_extractor import (
+                typosquatting_score, domain_perplexity_score,
+                homoglyph_score, entropy_score, shannon_entropy,
+                _ratio_digits_excluding_uuid, _has_valid_uuid_in_path,
+                PHISHING_KEYWORDS, KNOWN_BRANDS
+            )
+            from urllib.parse import urlparse
+
+            typo_scores, perp_scores, hg_scores, ent_scores = [], [], [], []
+            ratio_digits_fixed, has_uuid_col = [], []
+            phish_hints_col, brand_sub_col = [], []
+
+            for url in df['url']:
                 try:
-                    self.models[name] = joblib.load(f'{model_dir}/{name}_model.pkl')
-                except FileNotFoundError:
-                    print(f"Model {name} not found, skipping...")
+                    u = str(url)
+                    if not u.startswith(('http://', 'https://')):
+                        u = 'http://' + u
+                    parsed = urlparse(u)
+                    hostname = parsed.netloc.split(':')[0] or ''
+                    path_  = parsed.path or ''
+                    domain_parts = hostname.split('.')
+                    domain_name = domain_parts[-2].lower() if len(domain_parts) >= 2 else hostname.lower()
+                    subdomain = '.'.join(domain_parts[:-2]).lower() if len(domain_parts) > 2 else ''
 
-            # Load ensemble model
-            try:
-                self.ensemble_model = joblib.load(f'{model_dir}/ensemble_model.pkl')
-            except FileNotFoundError:
-                print("Ensemble model not found")
+                    ts, _, _ = typosquatting_score(domain_name)
+                    typo_scores.append(ts)
+                    perp_scores.append(domain_perplexity_score(domain_name))
+                    hg, _ = homoglyph_score(domain_name)
+                    hg_scores.append(hg)
+                    ent_scores.append(entropy_score(domain_name))
+                    ratio_digits_fixed.append(_ratio_digits_excluding_uuid(u, path_))
+                    has_uuid_col.append(1 if _has_valid_uuid_in_path(path_) else 0)
+                    phish_hints_col.append(sum(1 for kw in PHISHING_KEYWORDS if kw in u.lower()))
+                    brand_sub_col.append(1 if any(b in subdomain for b in KNOWN_BRANDS) else 0)
+                except Exception:
+                    typo_scores.append(0.0); perp_scores.append(0.0)
+                    hg_scores.append(0.0);   ent_scores.append(0.0)
+                    ratio_digits_fixed.append(0.0); has_uuid_col.append(0)
+                    phish_hints_col.append(0); brand_sub_col.append(0)
 
-            print(f"Models loaded from {model_dir}/")
-            return True
+            df['typosquatting_score']      = typo_scores
+            df['domain_perplexity_score']  = perp_scores
+            df['homoglyph_score']          = hg_scores
+            df['domain_entropy_score']     = ent_scores
+            df['ratio_digits_url']         = ratio_digits_fixed      # UUID-aware version
+            df['has_uuid_in_path']         = has_uuid_col
+            df['phish_hints']              = phish_hints_col
+            df['brand_in_subdomain']       = brand_sub_col
 
+            # Recompute 'ip': 1 if hostname is a raw IPv4 address like 192.168.1.1
+            # Must match the same computation used in feature_extractor.py at inference
+            import re as _re
+            from urllib.parse import urlparse as _up
+            _ip_pat = _re.compile(r'^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$')
+            def _is_ip(u):
+                try:
+                    host = _up(u if '://' in u else 'http://' + u).netloc.split(':')[0]
+                    return 1 if _ip_pat.match(host) else 0
+                except Exception:
+                    return 0
+            df['ip'] = df['url'].apply(_is_ip)
+
+            # Fix nb_colon: subtract 1 for the scheme colon (http: or https:)
+            # Without this fix, ALL https:// URLs get nb_colon=1 just from the scheme,
+            # which trains the model to think colons in URLs are suspicious — wrong!
+            if 'nb_colon' in df.columns:
+                df['nb_colon'] = (df['nb_colon'] - 1).clip(lower=0)
+
+            logger.info("Math feature augmentation complete.")
+
+        logger.info(f"Final shape: {df.shape}")
+        return df
+
+    # ── Preprocessing ────────────────────────────────────────────────────────
+
+    def preprocess(self, df: pd.DataFrame, test_size: float = 0.2):
+        logger.info("Preprocessing data...")
+
+        X = df.drop(['url', 'status'], axis=1, errors='ignore')
+        y = df['status']
+
+        # Drop unreliable features
+        to_drop = [c for c in _UNRELIABLE_COLS if c in X.columns]
+        X = X.drop(to_drop, axis=1)
+        logger.info(f"Features after dropping unreliable: {X.shape[1]} (dropped {len(to_drop)})")
+
+        self.feature_names = list(X.columns)
+
+        # Fill NaN
+        X = X.fillna(X.median(numeric_only=True))
+        for col in X.select_dtypes(include='object').columns:
+            X[col] = LabelEncoder().fit_transform(X[col].astype(str))
+
+        # Encode target
+        y_enc = self.label_encoder.fit_transform(y)
+
+        # Feature engineering: interaction features
+        X = self._engineer_features(X)
+
+        # Feature selection
+        X = self._select_features(X, y_enc, k=50)
+
+        # Split
+        X_tr, X_te, y_tr, y_te = train_test_split(
+            X, y_enc, test_size=test_size,
+            random_state=self.random_state, stratify=y_enc
+        )
+
+        # Scale
+        X_tr_s = pd.DataFrame(self.scaler.fit_transform(X_tr), columns=self.selected_features)
+        X_te_s = pd.DataFrame(self.scaler.transform(X_te),     columns=self.selected_features)
+
+        logger.info(f"Train: {X_tr_s.shape}, Test: {X_te_s.shape}")
+        return X_tr_s, X_te_s, y_tr, y_te
+
+    def _engineer_features(self, X: pd.DataFrame) -> pd.DataFrame:
+        X = X.copy()
+        try:
+            if 'length_url' in X.columns and 'nb_dots' in X.columns:
+                X['length_url_x_nb_dots']   = X['length_url'] * X['nb_dots']
+                X['length_url_div_nb_dots']  = X['length_url'] / (X['nb_dots'] + 1e-6)
+            if 'length_url' in X.columns and 'nb_slash' in X.columns:
+                X['length_url_div_nb_slash'] = X['length_url'] / (X['nb_slash'] + 1e-6)
+            if 'length_url' in X.columns and 'nb_hyphens' in X.columns:
+                X['length_url_x_nb_hyphens'] = X['length_url'] * X['nb_hyphens']
+            if 'nb_dots' in X.columns and 'nb_hyphens' in X.columns:
+                X['dots_x_hyphens'] = X['nb_dots'] * X['nb_hyphens']
         except Exception as e:
-            print(f"Error loading models: {str(e)}")
+            logger.warning(f"Feature engineering partial failure: {e}")
+        return X
+
+    def _select_features(self, X: pd.DataFrame, y, k: int = 50) -> pd.DataFrame:
+        logger.info(f"Selecting top {k} features...")
+
+        # Univariate selection
+        uni = SelectKBest(score_func=f_classif, k=min(k, X.shape[1]))
+        uni.fit(X, y)
+        set1 = set(X.columns[uni.get_support()])
+
+        # Model-based selection
+        rf = RandomForestClassifier(n_estimators=50, random_state=self.random_state)
+        mbs = SelectFromModel(rf, max_features=min(k, X.shape[1]))
+        mbs.fit(X, y)
+        set2 = set(X.columns[mbs.get_support()])
+
+        selected = list(set1 & set2)
+        if len(selected) < k // 2:
+            selected = list(set1 | set2)[:k]
+
+        self.selected_features = selected
+        logger.info(f"Selected {len(selected)} features")
+        return X[selected]
+
+    # ── Model Training ────────────────────────────────────────────────────────
+
+    def train_models(self, X_tr, y_tr):
+        logger.info("Training models...")
+
+        configs = {
+            'random_forest':     RandomForestClassifier(n_estimators=200, max_depth=15, random_state=self.random_state),
+            'gradient_boosting': GradientBoostingClassifier(n_estimators=150, learning_rate=0.1, max_depth=8, random_state=self.random_state),
+            'extra_trees':       ExtraTreesClassifier(n_estimators=200, max_depth=15, random_state=self.random_state),
+            'logistic_regression': LogisticRegression(max_iter=1000, C=1.0, random_state=self.random_state),
+            'svm':               SVC(probability=True, C=1.0, gamma='scale', random_state=self.random_state),
+            'neural_network':    MLPClassifier(hidden_layer_sizes=(128, 64, 32), max_iter=500, alpha=0.001, random_state=self.random_state),
+            'naive_bayes':       GaussianNB(),
+            'knn':               KNeighborsClassifier(n_neighbors=5),
+            'decision_tree':     DecisionTreeClassifier(max_depth=10, random_state=self.random_state),
+        }
+
+        if HAS_XGB:
+            configs['xgboost'] = xgb.XGBClassifier(
+                n_estimators=150, learning_rate=0.1, max_depth=8,
+                random_state=self.random_state, eval_metric='logloss',
+                verbosity=0
+            )
+        if HAS_LGB:
+            configs['lightgbm'] = lgb.LGBMClassifier(
+                n_estimators=150, learning_rate=0.1, max_depth=8,
+                random_state=self.random_state, verbose=-1
+            )
+
+        for name, model in configs.items():
+            try:
+                logger.info(f"  Training {name}...")
+                t0 = time.time()
+                cv = cross_val_score(model, X_tr, y_tr, cv=5, scoring='roc_auc')
+                model.fit(X_tr, y_tr)
+                elapsed = time.time() - t0
+                self.models[name] = model
+                self.training_history[name] = {
+                    'cv_mean': float(cv.mean()),
+                    'cv_std':  float(cv.std()),
+                    'training_time': elapsed
+                }
+                logger.info(f"    {name}: AUC={cv.mean():.5f} ±{cv.std():.5f} ({elapsed:.1f}s)")
+            except Exception as e:
+                logger.error(f"    {name} failed: {e}")
+
+    def create_ensemble(self, X_tr, y_tr):
+        logger.info("Creating stacking ensemble...")
+
+        base = [(n, self.models[n]) for n in ['random_forest', 'gradient_boosting',
+                'extra_trees', 'xgboost', 'lightgbm'] if n in self.models]
+        if len(base) < 2:
+            logger.warning("Not enough base models for stacking")
+            return
+
+        self.stacking_classifier = StackingClassifier(
+            estimators=base,
+            final_estimator=LogisticRegression(random_state=self.random_state),
+            cv=5, n_jobs=-1
+        )
+        self.stacking_classifier.fit(X_tr, y_tr)
+        cv = cross_val_score(self.stacking_classifier, X_tr, y_tr, cv=3, scoring='roc_auc')
+        logger.info(f"  Stacking ensemble: AUC={cv.mean():.5f} ±{cv.std():.5f}")
+
+    def train_anomaly_detector(self, X_tr):
+        logger.info("Training anomaly detector...")
+        self.anomaly_detector = IsolationForest(
+            contamination=0.1, n_estimators=100, random_state=self.random_state
+        )
+        self.anomaly_detector.fit(X_tr)
+
+    def evaluate(self, X_te, y_te):
+        logger.info("Evaluating models...")
+        all_models = dict(self.models)
+        if self.stacking_classifier:
+            all_models['stacking_ensemble'] = self.stacking_classifier
+
+        for name, model in all_models.items():
+            try:
+                y_pred = model.predict(X_te)
+                y_prob = model.predict_proba(X_te)[:, 1] if hasattr(model, 'predict_proba') else None
+                self.model_performances[name] = {
+                    'accuracy':  float(accuracy_score(y_te, y_pred)),
+                    'precision': float(precision_score(y_te, y_pred, pos_label=1, zero_division=0)),
+                    'recall':    float(recall_score(y_te, y_pred, pos_label=1, zero_division=0)),
+                    'f1':        float(f1_score(y_te, y_pred, pos_label=1, zero_division=0)),
+                    'auc':       float(roc_auc_score(y_te, y_prob)) if y_prob is not None else None
+                }
+                logger.info(f"  {name}: Acc={self.model_performances[name]['accuracy']:.4f} "
+                            f"AUC={self.model_performances[name].get('auc', 'N/A')}")
+            except Exception as e:
+                logger.error(f"  {name} eval failed: {e}")
+
+    def save_models(self, model_dir: str = 'models'):
+        os.makedirs(model_dir, exist_ok=True)
+        for name, model in self.models.items():
+            joblib.dump(model, os.path.join(model_dir, f'{name}_model.pkl'))
+        if self.stacking_classifier:
+            joblib.dump(self.stacking_classifier, os.path.join(model_dir, 'stacking_ensemble.pkl'))
+        if self.anomaly_detector:
+            joblib.dump(self.anomaly_detector, os.path.join(model_dir, 'anomaly_detector.pkl'))
+        joblib.dump(self.scaler,        os.path.join(model_dir, 'scaler.pkl'))
+        joblib.dump(self.label_encoder, os.path.join(model_dir, 'label_encoder.pkl'))
+
+        metadata = {
+            'feature_names':      self.feature_names,
+            'selected_features':  self.selected_features,
+            'training_history':   self.training_history,
+            'model_performances': self.model_performances,
+            'timestamp':          datetime.now().isoformat()
+        }
+        with open(os.path.join(model_dir, 'metadata.json'), 'w') as f:
+            json.dump(metadata, f, indent=2, default=str)
+        logger.info(f"All models saved to {model_dir}/")
+
+    def load_models(self, model_dir: str = 'models') -> bool:
+        try:
+            with open(os.path.join(model_dir, 'metadata.json')) as f:
+                meta = json.load(f)
+            self.feature_names     = meta.get('feature_names', [])
+            self.selected_features = meta.get('selected_features', [])
+            self.training_history  = meta.get('training_history', {})
+            self.model_performances = meta.get('model_performances', {})
+
+            self.scaler        = joblib.load(os.path.join(model_dir, 'scaler.pkl'))
+            self.label_encoder = joblib.load(os.path.join(model_dir, 'label_encoder.pkl'))
+
+            for f in os.listdir(model_dir):
+                if f.endswith('_model.pkl'):
+                    name = f.replace('_model.pkl', '')
+                    self.models[name] = joblib.load(os.path.join(model_dir, f))
+
+            se = os.path.join(model_dir, 'stacking_ensemble.pkl')
+            if os.path.exists(se):
+                self.stacking_classifier = joblib.load(se)
+
+            ad = os.path.join(model_dir, 'anomaly_detector.pkl')
+            if os.path.exists(ad):
+                self.anomaly_detector = joblib.load(ad)
+
+            logger.info(f"Loaded {len(self.models)} models from {model_dir}/")
+            return True
+        except Exception as e:
+            logger.error(f"Error loading models: {e}")
             return False
 
-    def evaluate_model_performance(self, test_urls, test_labels):
-        """Comprehensive model evaluation"""
-        if not self.ensemble_model:
-            raise ValueError("No trained model found. Please train the model first.")
-
-        predictions = []
-        probabilities = []
-
-        print("Evaluating model performance...")
-        for url in test_urls:
-            try:
-                result = self.predict_single_url(url, detailed=False)
-                predictions.append(1 if result['prediction'] == 'Phishing' else 0)
-                probabilities.append(result['phishing_probability'])
-            except:
-                predictions.append(0)
-                probabilities.append(0.0)
-
-        # Calculate metrics
-        accuracy = accuracy_score(test_labels, predictions)
-        auc_roc = roc_auc_score(test_labels, probabilities)
-
-        print("\n=== MODEL EVALUATION ===")
-        print(f"Accuracy: {accuracy:.4f}")
-        print(f"AUC-ROC: {auc_roc:.4f}")
-        print("\nClassification Report:")
-        print(classification_report(test_labels, predictions))
-        print("\nConfusion Matrix:")
-        print(confusion_matrix(test_labels, predictions))
-
-        return {
-            'accuracy': accuracy,
-            'auc_roc': auc_roc,
-            'predictions': predictions,
-            'probabilities': probabilities
-        }
-
-    def train_models(self, data_file=None, urls=None, labels=None):
-        """Train multiple models with advanced techniques"""
-
-        if data_file:
-            # Load data from file (this path can still be used if a file is provided externally)
-            df = pd.read_csv(data_file)
-            urls = df['url'].tolist()
-            labels = df['label'].tolist()
-
-        if not urls or not labels:
-            raise ValueError("No training data provided. Please provide URLs and labels or a data file.")
-
-        print("Extracting features from training data...")
-        feature_list = []
-        valid_indices = []
-
-        for i, url in enumerate(urls):
-            try:
-                features = self.extract_comprehensive_features(url, fetch_content=False)
-                feature_list.append(features)
-                valid_indices.append(i)
-            except Exception as e:
-                print(f"Skipping URL {i}: {url} due to error: {str(e)}")
-                continue
-
-        # Convert to DataFrame
-        df_features = pd.DataFrame(feature_list)
-        y = [labels[i] for i in valid_indices]
-
-        # Handle missing values
-        df_features = df_features.fillna(0)
-
-        # Feature scaling
-        X_scaled = self.scaler.fit_transform(df_features)
-
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_scaled, y, test_size=0.2, random_state=42, stratify=y
-        )
-
-        print("Training multiple models...")
-
-        # Individual models
-        models_config = {
-            'random_forest': RandomForestClassifier(n_estimators=200, max_depth=15, random_state=42),
-            'gradient_boosting': GradientBoostingClassifier(n_estimators=150, learning_rate=0.1, random_state=42),
-            'xgboost': xgb.XGBClassifier(n_estimators=150, learning_rate=0.1, max_depth=8, random_state=42),
-            'lightgbm': lgb.LGBMClassifier(n_estimators=150, learning_rate=0.1, max_depth=8, random_state=42),
-            'logistic_regression': LogisticRegression(random_state=42, max_iter=1000),
-            'svm': SVC(probability=True, random_state=42),
-            'neural_network': MLPClassifier(hidden_layer_sizes=(100, 50), random_state=42, max_iter=500)
-        }
-
-        # Train individual models
-        for name, model in models_config.items():
-            print(f"Training {name}...")
-            model.fit(X_train, y_train)
-            train_score = model.score(X_train, y_train)
-            test_score = model.score(X_test, y_test)
-            print(f"{name} - Train: {train_score:.4f}, Test: {test_score:.4f}")
-            self.models[name] = model
-
-        # Create ensemble model
-        print("Creating ensemble model...")
-        ensemble_models = [
-            ('rf', self.models['random_forest']),
-            ('gb', self.models['gradient_boosting']),
-            ('xgb', self.models['xgboost']),
-            ('lgb', self.models['lightgbm'])
-        ]
-
-        self.ensemble_model = VotingClassifier(
-            estimators=ensemble_models,
-            voting='soft'
-        )
-
-        self.ensemble_model.fit(X_train, y_train)
-        ensemble_score = self.ensemble_model.score(X_test, y_test)
-        print(f"Ensemble Model Test Score: {ensemble_score:.4f}")
-
-        # Detailed evaluation
-        y_pred = self.ensemble_model.predict(X_test)
-        y_pred_proba = self.ensemble_model.predict_proba(X_test)[:, 1]
-
-        print("\n=== EVALUATION RESULTS ===")
-        print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
-        print(f"AUC-ROC: {roc_auc_score(y_test, y_pred_proba):.4f}")
-        print("\nClassification Report:")
-        print(classification_report(y_test, y_pred))
-
-        # Feature importance
-        feature_importance = pd.DataFrame({
-            'feature': df_features.columns,
-            'importance': self.models['random_forest'].feature_importances_
-        }).sort_values('importance', ascending=False)
-
-        print("\nTop 20 Most Important Features:")
-        print(feature_importance.head(20))
-
-        # Save models
-        self.save_models()
-
-        return {
-            'accuracy': accuracy_score(y_test, y_pred),
-            'auc_roc': roc_auc_score(y_test, y_pred_proba),
-            'feature_importance': feature_importance
-        }
-
-    def predict_single_url(self, url, detailed=False):
-        """Predict if a single URL is phishing"""
+    def predict(self, features_df: pd.DataFrame, return_details: bool = False, url: str = None) -> Dict[str, Any]:
+        """Make prediction using ensemble. Input: raw features dict/DataFrame."""
         try:
-            features = self.extract_comprehensive_features(url, fetch_content=True)
-            df_features = pd.DataFrame([features])
-            df_features = df_features.fillna(0)
+            if isinstance(features_df, dict):
+                features_df = pd.DataFrame([features_df])
+            elif isinstance(features_df, pd.Series):
+                features_df = features_df.to_frame().T
 
-            # Ensure all required columns are present
-            if hasattr(self.scaler, 'feature_names_in_'):
-                expected_features = self.scaler.feature_names_in_
-            else:
-                expected_features = list(self._get_default_features().keys())
-                dynamic_features_example = [
-                    'response_time', 'status_code', 'redirect_count', 'final_url_different',
-                    'content_length', 'content_type', 'form_count', 'input_count',
-                    'password_field_count', 'hidden_field_count', 'external_link_count',
-                    'total_link_count', 'image_count', 'external_image_count',
-                    'script_count', 'external_script_count', 'page_text_length',
-                    'suspicious_text_count', 'has_favicon', 'has_title', 'title_length',
-                    'cert_days_until_expiry', 'cert_age_days', 'cert_is_expired',
-                    'cert_is_self_signed', 'cert_trusted_ca', 'domain_age_days',
-                    'domain_age_months', 'domain_expires_in_days', 'has_registrar_info',
-                    'has_registrant_info', 'a_record_count', 'has_mx_record',
-                    'mx_record_count', 'ns_record_count'
-                ]
-                for f in dynamic_features_example:
-                    if f not in expected_features:
-                        expected_features.append(f)
+            # Engineer same interaction features
+            features_df = self._engineer_features(features_df)
 
-            for feature in expected_features:
-                if feature not in df_features.columns:
-                    df_features[feature] = 0
+            # Align to selected features
+            for feat in self.selected_features:
+                if feat not in features_df.columns:
+                    features_df[feat] = 0
+            features_df = features_df[self.selected_features]
 
-            # Reorder columns to match training
-            df_features = df_features[expected_features]
+            scaled    = self.scaler.transform(features_df)
+            scaled_df = pd.DataFrame(scaled, columns=self.selected_features)
 
-            X_scaled = self.scaler.transform(df_features)
+            # Per-model predictions
+            model_results = {}
+            phish_probs   = []
+
+            for name, model in self.models.items():
+                try:
+                    pred = model.predict(scaled_df)[0]
+                    prob = model.predict_proba(scaled_df)[0] if hasattr(model, 'predict_proba') else [0.5, 0.5]
+                    model_results[name] = {
+                        'prediction':    self.label_encoder.inverse_transform([pred])[0],
+                        'phishing_prob': float(prob[1]),
+                        'legit_prob':    float(prob[0])
+                    }
+                    phish_probs.append(float(prob[1]))
+                except Exception:
+                    pass
 
             # Ensemble prediction
-            prediction = self.ensemble_model.predict(X_scaled)[0]
-            probability = self.ensemble_model.predict_proba(X_scaled)[0]
+            if self.stacking_classifier:
+                ens_pred = self.stacking_classifier.predict(scaled_df)[0]
+                ens_prob = self.stacking_classifier.predict_proba(scaled_df)[0]
+            else:
+                preds = [v['phishing_prob'] for v in model_results.values()]
+                avg_p = sum(preds) / len(preds) if preds else 0.5
+                ens_prob = [1 - avg_p, avg_p]
+                ens_pred = 1 if avg_p > 0.5 else 0
+
+            # Anomaly detection
+            is_anomaly    = False
+            anomaly_score = 0.0
+            if self.anomaly_detector:
+                anomaly_score = float(self.anomaly_detector.decision_function(scaled_df)[0])
+                is_anomaly    = self.anomaly_detector.predict(scaled_df)[0] == -1
+
+            final_label  = self.label_encoder.inverse_transform([ens_pred])[0]
+            phishing_prob = float(ens_prob[1])
+
+            # ── Alexa brand whitelist cap (+ extended modern brands) ─────────
+            # If the BASE DOMAIN is a known legitimate brand, URL path/structural
+            # features cannot reliably flag phishing. Cap score to 15%.
+            # The intelligence APIs (Layer 1+2) will catch real phishing on these.
+            _EXTRA_BRANDS = {
+                'claude', 'openai', 'chatgpt', 'anthropic', 'gemini', 'notion',
+                'figma', 'vercel', 'netlify', 'supabase', 'huggingface', 'wandb',
+                'colab', 'kaggle', 'replit', 'codesandbox', 'stackblitz',
+                'perplexity', 'midjourney', 'stability', 'runway', 'linear',
+                'sentry', 'datadog', 'grafana', 'posthog', 'mixpanel',
+            }
+            if url:
+                try:
+                    from urllib.parse import urlparse
+                    from feature_extractor import ALEXA_SLDS
+                    _parsed = urlparse(url if '://' in url else 'http://' + url)
+                    _parts  = _parsed.netloc.split(':')[0].split('.')
+                    _sld    = _parts[-2].lower() if len(_parts) >= 2 else ''
+                    if (_sld in ALEXA_SLDS) or (_sld in _EXTRA_BRANDS):
+                        _cap = 0.15
+                        if phishing_prob > _cap:
+                            phishing_prob = _cap
+                            final_label   = 'legitimate'
+                            for k in model_results:
+                                if model_results[k]['phishing_prob'] > _cap:
+                                    model_results[k]['phishing_prob'] = _cap
+                                    model_results[k]['legit_prob']    = 1 - _cap
+                                    model_results[k]['prediction']    = 'legitimate'
+                except Exception:
+                    pass
+
+            # ── UUID-in-path discount ─────────────────────────────────────────
+            # URLs with a UUID in the path are characteristic of legitimate web apps
+            # (chat session IDs, resource IDs, etc.) Phishing URLs don't use real UUIDs.
+            # If the score is ambiguous (45–75%), apply a discount to prevent false positives.
+            try:
+                _has_uuid = int(features_df['has_uuid_in_path'].iloc[0]) if 'has_uuid_in_path' in features_df.columns else 0
+                if _has_uuid and 0.45 <= phishing_prob <= 0.75:
+                    phishing_prob = min(phishing_prob * 0.35, 0.20)  # Strong discount
+                    final_label   = 'legitimate'
+            except Exception:
+                pass
+
+            # ── Typosquatting hard override ──────────────────────────────────────
+            # If the domain is 1 edit away from a known brand (typosquatting_score ≥ 0.90),
+            # override the ML result — even if the brand whitelist cap already ran.
+            # Example: flipkar.com (dist=1 from flipkart) must be PHISHING, not legitimate.
+            try:
+                _typo_score = float(features_df['typosquatting_score'].iloc[0]) \
+                    if 'typosquatting_score' in features_df.columns else 0.0
+                if _typo_score >= 0.90:
+                    phishing_prob = max(phishing_prob, 0.93)
+                    final_label   = 'phishing'
+            except Exception:
+                pass
 
             result = {
-                'url': url,
-                'prediction': 'Phishing' if prediction == 1 else 'Legitimate',
-                'phishing_probability': probability[1],
-                'legitimate_probability': probability[0],
-                'confidence': max(probability),
-                'risk_level': self._get_risk_level(probability[1])
+                'prediction':         final_label,
+                'phishing_probability': phishing_prob,
+                'confidence':         float(max(ens_prob)),
+                'risk_level':         self._risk_level(phishing_prob),
+                'anomaly_score':      anomaly_score,
+                'is_anomaly':         is_anomaly,
             }
-
-            if detailed:
-                # Individual model predictions
-                individual_predictions = {}
-                for name, model in self.models.items():
-                    try:
-                        pred_proba = model.predict_proba(X_scaled)[0]
-                        individual_predictions[name] = {
-                            'prediction': 'Phishing' if pred_proba[1] > 0.5 else 'Legitimate',
-                            'phishing_probability': pred_proba[1]
-                        }
-                    except Exception as e:
-                        print(f"Error predicting with individual model {name}: {e}")
-                        pass # Model might not support predict_proba or other issues
-
-                result['individual_models'] = individual_predictions
-                result['features'] = features
-                result['suspicious_indicators'] = self._get_suspicious_indicators(features)
+            if return_details:
+                result['individual_models'] = model_results
 
             return result
 
         except Exception as e:
-            return {
-                'url': url,
-                'prediction': 'Error',
-                'phishing_probability': 0.5,
-                'legitimate_probability': 0.5,
-                'confidence': 0.0,
-                'risk_level': 'Unknown',
-                'error': str(e)
-            }
+            logger.error(f"Prediction error: {e}")
+            return {'prediction': 'error', 'phishing_probability': 0.5,
+                    'confidence': 0.0, 'risk_level': 'unknown', 'error': str(e)}
+
+    @staticmethod
+    def _risk_level(prob: float) -> str:
+        if prob >= 0.90: return 'Critical'
+        if prob >= 0.70: return 'High'
+        if prob >= 0.50: return 'Medium'
+        if prob >= 0.30: return 'Low'
+        return 'Safe'
 
 
-# Example usage and testing
+def main():
+    print("=" * 70)
+    print("  PhishGuard — ML Training Pipeline (Layer 3)")
+    print("=" * 70)
+
+    detector = PhishingDetector()
+
+    dataset_path = 'data/dataset_phishing.csv'
+    small_path   = 'data/dataset_phishing_50k.csv'
+
+    if os.path.exists(small_path):
+        print(f"\nFound smaller dataset ({small_path}). Use it for faster training? [Y/n]")
+        if input().strip().lower() != 'n':
+            dataset_path = small_path
+
+    df = detector.load_dataset(dataset_path)
+    X_tr, X_te, y_tr, y_te = detector.preprocess(df)
+    detector.train_models(X_tr, y_tr)
+    detector.create_ensemble(X_tr, y_tr)
+    detector.train_anomaly_detector(X_tr)
+    detector.evaluate(X_te, y_te)
+    detector.save_models('models')
+
+    print("\n" + "=" * 70)
+    print("  Training Complete! Run: streamlit run app.py")
+    print("=" * 70)
+
+
 if __name__ == "__main__":
-    # Initialize detector
-    detector = AdvancedPhishingDetector()
-
-    # Sample training data (Expanded lists provided by the user)
-    legitimate_urls = [
-        'https://www.google.com',
-        'https://www.facebook.com',
-        'https://www.amazon.com',
-        'https://www.microsoft.com',
-        'https://www.apple.com',
-        'https://www.paypal.com',
-        'https://www.ebay.com',
-        'https://www.twitter.com',
-        'https://www.instagram.com',
-        'https://www.linkedin.com',
-        'https://www.netflix.com',
-        'https://www.spotify.com',
-        'https://www.youtube.com',
-        'https://www.github.com',
-        'https://www.reddit.com',
-        'https://www.wikipedia.org',
-        'https://www.stackoverflow.com',
-        'https://www.dropbox.com',
-        'https://www.zoom.us',
-        'https://www.slack.com',
-        'https://www.adobe.com',
-        'https://www.salesforce.com',
-        'https://www.oracle.com',
-        'https://www.ibm.com',
-        'https://www.intel.com',
-        'https://www.nvidia.com',
-        'https://www.samsung.com',
-        'https://www.sony.com',
-        'https://www.hp.com',
-        'https://www.dell.com',
-        'https://www.cisco.com',
-        'https://www.vmware.com',
-        'https://www.shopify.com',
-        'https://www.squarespace.com',
-        'https://www.wordpress.com',
-        'https://www.twitch.tv',
-        'https://www.tiktok.com',
-        'https://www.snapchat.com',
-        'https://www.pinterest.com',
-        'https://www.tumblr.com',
-        'https://www.mailchimp.com',
-        'https://www.constantcontact.com',
-        'https://www.wix.com',
-        'https://www.godaddy.com',
-        'https://www.namecheap.com',
-        'https://www.bluehost.com',
-        'https://www.hostgator.com',
-        'https://www.cloudflare.com',
-        'https://www.aws.amazon.com',
-        'https://www.azure.microsoft.com',
-        'https://www.chase.com',
-        'https://www.bankofamerica.com',
-        'https://www.wellsfargo.com',
-        'https://www.citibank.com',
-        'https://www.capitalone.com',
-        'https://www.americanexpress.com',
-        'https://www.discover.com',
-        'https://www.visa.com',
-        'https://www.mastercard.com',
-        'https://www.usbank.com',
-        'https://www.pnc.com',
-        'https://www.tdbank.com',
-        'https://www.schwab.com',
-        'https://www.fidelity.com',
-        'https://www.vanguard.com',
-        'https://www.etrade.com',
-        'https://www.robinhood.com',
-        'https://www.coinbase.com',
-        'https://www.binance.com',
-        'https://www.kraken.com',
-        'https://www.gemini.com',
-        'https://www.bitfinex.com',
-        'https://www.walmart.com',
-        'https://www.target.com',
-        'https://www.bestbuy.com',
-        'https://www.homedepot.com',
-        'https://www.lowes.com',
-        'https://www.macys.com',
-        'https://www.kohls.com',
-        'https://www.jcpenney.com',
-        'https://www.nordstrom.com',
-        'https://www.costco.com',
-        'https://www.samsclub.com',
-        'https://www.alibaba.com',
-        'https://www.aliexpress.com',
-        'https://www.wish.com',
-        'https://www.etsy.com',
-        'https://www.overstock.com',
-        'https://www.wayfair.com',
-        'https://www.booking.com',
-        'https://www.expedia.com',
-        'https://www.trivago.com',
-        'https://www.hotels.com',
-        'https://www.airbnb.com',
-        'https://www.uber.com',
-        'https://www.lyft.com',
-        'https://www.doordash.com',
-        'https://www.grubhub.com',
-        'https://www.ubereats.com',
-        'https://www.postmates.com',
-        'https://www.instacart.com',
-        'https://www.shipt.com',
-        'https://www.cnn.com',
-        'https://www.bbc.com',
-        'https://www.nytimes.com',
-        'https://www.washingtonpost.com',
-        'https://www.reuters.com',
-        'https://www.bloomberg.com',
-        'https://www.wsj.com',
-        'https://www.usatoday.com',
-        'https://www.foxnews.com',
-        'https://www.msnbc.com',
-    ]
-
-    phishing_urls = [
-        'http://paypaI.com-security-update.tk',
-        'https://amazon-security.ml',
-        'http://apple-id-verify.ga',
-        'https://microsoft-account-suspended.cf',
-        'http://google-security-alert.gq',
-        'https://facebook-security-check.tk',
-        'http://instagram-verify-account.ml',
-        'https://twitter-suspended-account.ga',
-        'http://linkedin-account-limited.cf',
-        'https://ebay-account-review.gq',
-        'http://netfIix-billing-update.tk',
-        'https://spotify-premium-expired.ml',
-        'http://paypal-account-verification.ga',
-        'https://amazon-prime-renewal.cf',
-        'http://apple-icloud-storage.gq',
-        'https://microsoft-office-expired.tk',
-        'http://google-drive-storage-full.ml',
-        'https://facebook-account-disabled.ga',
-        'http://instagram-copyright-violation.cf',
-        'https://twitter-account-suspended.gq',
-        'http://linkedin-premium-expired.tk',
-        'https://ebay-seller-fees-due.ml',
-        'http://netflix-payment-failed.ga',
-        'https://spotify-account-hacked.cf',
-        'http://paypal-unusual-activity.gq',
-        'https://amazon-order-cancelled.tk',
-        'http://apple-app-store-refund.ml',
-        'https://microsoft-security-breach.ga',
-        'http://google-account-compromised.cf',
-        'https://facebook-login-attempt.gq',
-        'http://instagram-new-message.tk',
-        'https://twitter-dm-notification.ml',
-        'http://linkedin-connection-request.ga',
-        'https://ebay-bid-confirmation.cf',
-        'http://netflix-new-device-login.gq',
-        'https://spotify-playlist-shared.tk',
-        'http://paypal-money-received.ml',
-        'https://amazon-package-delivery.ga',
-        'http://apple-warranty-expired.cf',
-        'https://microsoft-update-required.gq',
-        'http://google-photos-backup-full.tk',
-        'https://facebook-friend-request.ml',
-        'http://instagram-story-mention.ga',
-        'https://twitter-trending-notification.cf',
-        'http://linkedin-job-alert.gq',
-        'https://ebay-auction-ending.tk',
-        'http://chase-bank-alert.ml',
-        'https://bankofamerica-security.ga',
-        'http://wellsfargo-account-locked.cf',
-        'https://citibank-fraud-alert.gq',
-        'http://capitalone-payment-due.tk',
-        'https://americanexpress-reward.ml',
-        'http://discover-cashback-ready.ga',
-        'https://visa-transaction-declined.cf',
-        'http://mastercard-security-code.gq',
-        'https://usbank-mobile-banking.tk',
-        'http://pnc-account-update.ml',
-        'https://tdbank-wire-transfer.ga',
-        'http://schwab-investment-alert.cf',
-        'https://fidelity-portfolio-update.gq',
-        'http://vanguard-dividend-payment.tk',
-        'https://etrade-margin-call.ml',
-        'http://robinhood-stock-alert.ga',
-        'https://coinbase-price-alert.cf',
-        'http://binance-withdrawal-confirm.gq',
-        'https://kraken-deposit-received.tk',
-        'http://gemini-account-verified.ml',
-        'https://bitfinex-trading-suspended.ga',
-        'http://walmart-order-ready.cf',
-        'https://target-pickup-notification.gq',
-        'http://bestbuy-price-match.tk',
-        'https://homedepot-delivery-update.ml',
-        'http://lowes-store-pickup.ga',
-        'https://macys-sale-notification.cf',
-        'http://kohls-rewards-earned.gq',
-        'https://jcpenney-coupon-expires.tk',
-        'http://nordstrom-item-restocked.ml',
-        'https://costco-membership-renewal.ga',
-        'http://samsclub-gas-discount.cf',
-        'https://alibaba-supplier-message.gq',
-        'http://aliexpress-shipment-delay.tk',
-        'https://wish-order-processing.ml',
-        'http://etsy-shop-notification.ga',
-        'https://overstock-flash-sale.cf',
-        'http://wayfair-delivery-scheduled.gq',
-        'https://booking-reservation-confirm.tk',
-        'http://expedia-flight-cancelled.ml',
-        'https://trivago-price-drop.ga',
-        'http://hotels-booking-modified.cf',
-        'https://airbnb-host-message.gq',
-        'http://uber-trip-receipt.tk',
-        'https://lyft-ride-rating.ml',
-        'http://doordash-order-delivered.ga',
-        'https://grubhub-restaurant-closed.cf',
-        'http://ubereats-refund-processed.gq',
-        'https://postmates-delivery-issue.tk',
-        'http://instacart-shopper-message.ml',
-        'https://shipt-order-substitution.ga',
-        'http://amazon-aws-billing.cf',
-        'https://microsoft-azure-usage.gq',
-        'http://google-cloud-quota.tk',
-        'https://dropbox-storage-upgrade.ml',
-        'http://zoom-meeting-recording.ga',
-        'https://slack-workspace-invite.cf',
-        'http://adobe-subscription-renewal.gq',
-        'https://salesforce-license-expired.tk',
-        'http://oracle-support-ticket.ml',
-        'https://ibm-cloud-maintenance.ga',
-        'http://intel-driver-update.cf',
-        'https://nvidia-gpu-warranty.gq',
-        'http://samsung-device-recall.tk',
-        'https://sony-product-registration.ml',
-        'http://hp-printer-cartridge.ga',
-        'https://dell-warranty-extension.cf',
-        'http://cisco-security-patch.gq',
-        'https://vmware-license-activation.tk',
-        'http://shopify-payment-gateway.ml',
-        'https://squarespace-domain-renewal.ga',
-        'http://wordpress-plugin-update.cf',
-        'https://twitch-subscriber-badge.gq',
-        'http://tiktok-video-violation.tk',
-        'https://snapchat-friend-added.ml',
-        'http://pinterest-board-shared.ga',
-        'http://tumblr-post-flagged.cf',
-        'http://mailchimp-campaign-sent.gq',
-        'https://constantcontact-list-import.tk',
-        'http://wix-site-published.ml',
-        'https://godaddy-domain-transfer.ga',
-        'http://namecheap-ssl-certificate.cf',
-        'https://bluehost-backup-complete.gq',
-        'http://hostgator-server-migration.tk',
-        'https://cloudflare-ddos-protection.ml',
-        'http://github-repository-forked.ga',
-        'https://stackoverflow-answer-accepted.cf',
-        'http://reddit-comment-reply.gq',
-        'https://wikipedia-article-edited.tk',
-        'http://youtube-video-monetized.ml',
-        'https://netflix-account-sharing.ga',
-        'http://spotify-family-plan.cf',
-        'https://paypal-business-account.gq',
-        'http://apple-developer-program.tk',
-        'https://microsoft-partner-network.ml',
-        'http://google-ads-campaign.ga',
-        'https://facebook-business-manager.cf',
-        'http://instagram-creator-fund.gq',
-        'https://twitter-api-access.tk',
-        'http://linkedin-sales-navigator.ml',
-        'https://ebay-managed-payments.ga',
-    ]
-
-    # Process legitimate URLs for training
-    print("Processing legitimate URLs...")
-    full_urls = legitimate_urls + phishing_urls
-    full_labels = [0] * len(legitimate_urls) + [1] * len(phishing_urls)
-
-
-    # Train models
-    print("Starting training process with expanded dataset...")
-    try:
-        results = detector.train_models(
-            urls=full_urls,
-            labels=full_labels
-        )
-        print("Training completed successfully!")
-
-        # Test single prediction (using a new phishing URL not in training data for better test)
-        test_url = "http://bad-phish.gq/login?user=admin"
-        result = detector.predict_single_url(test_url, detailed=True)
-
-        print(f"\n=== SINGLE URL PREDICTION ===")
-        print(f"URL: {result['url']}")
-        print(f"Prediction: {result['prediction']}")
-        print(f"Phishing Probability: {result['phishing_probability']:.4f}")
-        print(f"Risk Level: {result['risk_level']}")
-        print(f"Suspicious Indicators: {result['suspicious_indicators']}")
-
-    except Exception as e:
-        print(f"Training or prediction failed: {str(e)}")
-        print("Please ensure all dependencies are installed (e.g., `pip install -r requirements.txt`) and your internet connection is stable for feature extraction during training.")
-
+    main()
