@@ -96,6 +96,30 @@ The app includes several optimizations for production:
 - API request timeouts (10 seconds)
 - Graceful error handling for missing API keys
 
+## Step 5: Keep Your App Awake (Recommended)
+
+Streamlit Cloud's free tier puts apps to sleep after ~15 minutes of inactivity. To prevent this:
+
+### Quick Setup: GitHub Actions (FREE)
+
+1. Go to your repository → `Settings` → `Secrets and variables` → `Actions`
+2. Create a new secret:
+   - Name: `STREAMLIT_APP_URL`
+   - Value: Your Streamlit app URL (e.g., `https://your-app.streamlit.app`)
+3. The GitHub Actions workflow (`.github/workflows/keep-alive.yml`) will automatically ping your app every 14 minutes
+
+**That's it!** Your app will now stay awake 24/7.
+
+### Need More Options?
+
+See **[KEEP_ALIVE.md](KEEP_ALIVE.md)** for 5 different keep-alive solutions including:
+- UptimeRobot (monitoring + keep-alive)
+- Koyeb (always-on free hosting)
+- Local Python scripts
+- Paid tier comparisons
+
+---
+
 ## Monitoring
 
 Streamlit Cloud provides:

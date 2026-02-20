@@ -130,6 +130,17 @@ PhishGuard is production-ready for Streamlit Cloud deployment!
 
 **Detailed deployment guide:** See [DEPLOYMENT.md](DEPLOYMENT.md)
 
+### ⚡ Keep Your App Awake 24/7
+
+Streamlit Cloud's free tier sleeps after 15 minutes of inactivity. We've included a **GitHub Actions workflow** that automatically pings your app every 14 minutes to keep it running!
+
+**Setup (takes 2 minutes):**
+1. Go to your GitHub repo → `Settings` → `Secrets` → `New secret`
+2. Name: `STREAMLIT_APP_URL` | Value: your Streamlit app URL
+3. The workflow runs automatically — check the `Actions` tab to verify
+
+**Full guide with 5 different solutions:** See [KEEP_ALIVE.md](KEEP_ALIVE.md)
+
 ### Live Demo
 
 🔗 [Try PhishGuard Live](https://your-app.streamlit.app) (coming soon)

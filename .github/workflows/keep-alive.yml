@@ -1,0 +1,19 @@
+name: Keep Streamlit App Alive
+
+on:
+  schedule:
+    # Run every 14 minutes (Streamlit Cloud sleeps after ~15 min of inactivity)
+    - cron: '*/14 * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Streamlit App
+        run: |
+          echo "Pinging Streamlit app to keep it alive..."
+          # Replace YOUR_APP_URL with your actual Streamlit Cloud URL
+          # Example: https://your-app-name.streamlit.app
+          curl -I -m 30 "${{ secrets.STREAMLIT_APP_URL || 'https://phishguard.streamlit.app' }}" || echo "Ping failed, but continuing..."
+          echo "Ping completed at $(date)"
