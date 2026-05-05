@@ -28,11 +28,16 @@ def predict(feature_json):
         return json.dumps({"error": "Model not loaded on server"})
         
     try:
+        import pandas as pd
         features = json.loads(feature_json)
-        # Reshape for prediction
-        X = np.array(features).reshape(1, -1)
-        X_scaled = scaler.transform(X)
         
+        # Create a DataFrame with the correct feature names
+        X_df = pd.DataFrame([features], columns=feature_names)
+        
+        # Transform using DataFrame
+        X_scaled = scaler.transform(X_df)
+        
+        # Predict using scaled numpy array
         prob = float(model.predict_proba(X_scaled)[0][1])
         pred = int(model.predict(X_scaled)[0])
         
