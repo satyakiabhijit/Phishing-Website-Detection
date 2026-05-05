@@ -6,7 +6,7 @@ colorTo: gray
 sdk: gradio
 app_file: app.py
 pinned: false
-python_version: "3.10"
+python_version: "3.11"
 ---
 
 # PhishGuard v2 — ML Inference Engine
