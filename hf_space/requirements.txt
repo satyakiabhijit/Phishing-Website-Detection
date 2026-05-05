@@ -1,4 +1,4 @@
-gradio
+gradio==4.38.1
 scikit-learn>=1.8.0
 joblib
 numpy
