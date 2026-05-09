@@ -53,7 +53,7 @@ export function fuseAnalysis(
     // If it is an extreme typosquat (distance 1) of a known brand, but NOT the legitimate brand itself
     finalScore = Math.max(finalScore, 0.75); // Auto-bump to Phishing/Suspicious
   }
-  if (math.homoglyphs && math.homoglyphs.length > 0) {
+  if (math.homoglyphs && math.homoglyphs.detected) {
     finalScore = Math.max(finalScore, 0.85); // Auto-bump to Phishing
   }
 
@@ -84,7 +84,7 @@ export function fuseAnalysis(
   if (math.typosquatResult.score > 0.8) {
     evidence.push({ id: "typo_brand", source: "math", severity: "medium", title: "Brand Impersonation", description: `This domain is a close match to "${math.typosquatResult.brand}", suggesting a typosquatting attempt.`, icon: "🎯" });
   }
-  if (math.homoglyphs && math.homoglyphs.length > 0) {
+  if (math.homoglyphs && math.homoglyphs.detected) {
     evidence.push({ id: "homoglyph", source: "math", severity: "high", title: "Homoglyph Detected", description: "The domain uses look-alike characters from different alphabets to deceive users.", icon: "🔤" });
   }
   if (math.perplexityScore > 0.7) {

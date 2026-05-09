@@ -34,11 +34,12 @@ export async function callHFInference(
       feature_json: JSON.stringify(features) 
     });
 
-    if (!result || !result.data || !result.data[0]) {
+    const data = result?.data as unknown[];
+    if (!data || !data[0]) {
       return { ...fallback, error: "Empty response from HF Space" };
     }
 
-    const parsed = JSON.parse(result.data[0] as string);
+    const parsed = JSON.parse(data[0] as string);
 
     return {
       available: true,

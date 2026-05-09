@@ -9,6 +9,7 @@ import EvidenceList from "@/components/EvidenceList";
 import ConfidenceBar from "@/components/ConfidenceBar";
 import LoadingSteps from "@/components/LoadingSteps";
 import RiskGauge from "@/components/RiskGauge";
+import HowItWorks from "@/components/HowItWorks";
 import type { AnalysisResult } from "@/lib/types";
 
 interface RecentScan {
@@ -267,9 +268,12 @@ export default function HomePage() {
         </motion.div>
       )}
 
+      {/* ── How It Works ── */}
+      {!result && !isLoading && <HowItWorks />}
+
       {/* ── Footer ── */}
       <footer className="mt-auto pt-16 pb-6 text-center text-xs text-text-muted">
-        <p>PhishGuard v2 — 4-layer AI phishing detection</p>
+        <p>PhishGuard v2 — 4-layer AI phishing detection · <a href="#how-it-works" className="underline hover:text-text-secondary">Research Overview</a></p>
       </footer>
     </main>
   );

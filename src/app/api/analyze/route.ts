@@ -58,11 +58,16 @@ export async function POST(req: NextRequest) {
       featureVector: featureData.features,
       entropy: featureData.meta.entropy,
       entropyScore: featureData.meta.entropy > 4 ? 0.8 : 0,
-      homoglyphs: hg,
+      homoglyphs: {
+        detected: hg.length > 0,
+        chars: hg,
+        normalizedDomain: hostname,
+        score: hg.length > 0 ? 1.0 : 0,
+      },
       typosquatResult: typo,
       perplexity: perp,
       perplexityScore: perp > 50 ? 1 : perp > 20 ? 0.5 : 0,
-      structuralFlags: [], // would add more flags
+      structuralFlags: [] as string[],
     };
 
     // 4. Fusion
