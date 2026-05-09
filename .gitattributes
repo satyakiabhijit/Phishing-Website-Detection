@@ -1,0 +1,2 @@
+*.joblib filter=lfs diff=lfs merge=lfs -text
+hf_space/models/*.joblib filter=lfs diff=lfs merge=lfs -text

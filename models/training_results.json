@@ -1,0 +1,83 @@
+{
+  "base_models": {
+    "rf": {
+      "cv_auc_mean": 0.9989434716370129,
+      "cv_auc_std": 9.578920999079685e-05,
+      "test_accuracy": 0.9965860175152145,
+      "test_auc": 0.9989231425615989,
+      "test_f1": 0.9970207805184952,
+      "train_time_s": 8.1
+    },
+    "xgb": {
+      "cv_auc_mean": 0.9989742780718054,
+      "cv_auc_std": 8.024119190515012e-05,
+      "test_accuracy": 0.9972221633198329,
+      "test_auc": 0.9990638255287679,
+      "test_f1": 0.9975764527408284,
+      "train_time_s": 1.0
+    },
+    "lgb": {
+      "cv_auc_mean": 0.9989528739645198,
+      "cv_auc_std": 7.790970778553517e-05,
+      "test_accuracy": 0.9972433681799868,
+      "test_auc": 0.9989891346207335,
+      "test_f1": 0.9975948196114709,
+      "train_time_s": 0.6
+    },
+    "mlp": {
+      "cv_auc_mean": 0.9987202626477183,
+      "cv_auc_std": 0.0001107923935907686,
+      "test_accuracy": 0.9978583091244513,
+      "test_auc": 0.9985369386476145,
+      "test_f1": 0.9981304951411384,
+      "train_time_s": 18.2
+    },
+    "lr": {
+      "cv_auc_mean": 0.9986033543235333,
+      "cv_auc_std": 0.00011952159995273904,
+      "test_accuracy": 0.9966072223753685,
+      "test_auc": 0.9986502578442396,
+      "test_f1": 0.9970420764623235,
+      "train_time_s": 0.3
+    }
+  },
+  "stacking": {
+    "test_accuracy": 0.9978795139846053,
+    "test_auc": 0.9989726248979035,
+    "test_f1": 0.9981489708277802
+  },
+  "feature_names": [
+    "URLLength",
+    "DomainLength",
+    "IsDomainIP",
+    "CharContinuationRate",
+    "TLDLegitimateProb",
+    "URLCharProb",
+    "TLDLength",
+    "NoOfSubDomain",
+    "HasObfuscation",
+    "NoOfObfuscatedChar",
+    "ObfuscationRatio",
+    "NoOfLettersInURL",
+    "LetterRatioInURL",
+    "NoOfDegitsInURL",
+    "DegitRatioInURL",
+    "NoOfEqualsInURL",
+    "NoOfQMarkInURL",
+    "NoOfAmpersandInURL",
+    "NoOfOtherSpecialCharsInURL",
+    "SpacialCharRatioInURL",
+    "IsHTTPS"
+  ],
+  "n_features": 21,
+  "dataset": "PhiUSIIL_Phishing_URL_Dataset.csv",
+  "dataset_rows": 235795,
+  "train_rows": 188636,
+  "test_rows": 47159,
+  "class_distribution": {
+    "legitimate": 100945,
+    "phishing": 134850
+  },
+  "trained_at": "2026-05-05T20:48:03.571756",
+  "mode": "url_only"
+}

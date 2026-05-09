@@ -1,210 +1,141 @@
-# <p align="center">🛡️ PhishGuard</p>
-<p align="center">
-  <strong>4-Layer AI Phishing Detection System</strong><br>
-  Real-time threat intelligence + mathematical models + ML ensemble
-</p>
+# PhishGuard v2 — AI Phishing Detection Platform
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?logo=python" />
-  <img src="https://img.shields.io/badge/Streamlit-1.30%2B-red?logo=streamlit" />
-  <img src="https://img.shields.io/badge/ML-Ensemble%20%7C%2011%20Models-green" />
-  <img src="https://img.shields.io/badge/Accuracy-97.9%25-brightgreen" />
-</p>
+> 4-layer AI phishing detection with 95+ threat engines, ML ensemble, and mathematical URL analysis.
 
----
-
-## 🏗️ Architecture
-
-PhishGuard uses a **4-layer fusion pipeline** to analyze any URL for phishing indicators:
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     URL INPUT                               │
-└─────────────────┬───────────────────────────────────────────┘
-                  │
-    ┌─────────────▼─────────────┐
-    │  Layer 1 - Threat Intel   │  VirusTotal (95 engines)
-    │                           │  Google Safe Browsing
-    └─────────────┬─────────────┘
-                  │
-    ┌─────────────▼─────────────┐
-    │  Layer 2 - Domain Intel   │  IPQualityScore (fraud score,
-    │                           │  domain age, DNS, SSL, malware)
-    └─────────────┬─────────────┘
-                  │
-    ┌─────────────▼─────────────┐
-    │  Layer 3A - Math Models   │  Damerau-Levenshtein typosquatting
-    │                           │  N-gram character LM perplexity
-    │                           │  Unicode homoglyph detection
-    │                           │  Shannon entropy (DGA detection)
-    └─────────────┬─────────────┘
-                  │
-    ┌─────────────▼─────────────┐
-    │  Layer 3B - ML Ensemble   │  11 models + stacking classifier
-    │                           │  RandomForest, GradBoost, XGBoost,
-    │                           │  LightGBM, ExtraTrees, SVM, MLP...
-    └─────────────┬─────────────┘
-                  │
-    ┌─────────────▼─────────────┐
-    │   Weighted Fusion Score   │  Intel 55% · ML 25% · Math 20%
-    │   + Hard API Overrides    │  (weights adapt when APIs unavailable)
-    └───────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│                    Frontend                       │
+│           Next.js 14 + TypeScript                │
+│           Tailwind CSS + Framer Motion            │
+│                  (Vercel)                         │
+└──────────────┬───────────────────────────────────┘
+               │ POST /api/analyze
+┌──────────────▼───────────────────────────────────┐
+│              API Route Handler                    │
+│         (Vercel Edge Functions)                   │
+├──────────────┬──────────┬────────────────────────┤
+│   Layer 1&2  │  Layer 3A │     Layer 3B          │
+│  Threat Intel│  Math/TS  │    ML Inference        │
+│  VT+GSB+IPQS│  Feature  │   HF Space (ONNX)     │
+│              │  Extract  │                        │
+└──────────────┴──────────┴────────────────────────┘
+               │
+┌──────────────▼───────────────────────────────────┐
+│            Weighted Fusion Engine                 │
+│     Dynamic weights + hard overrides             │
+│     Recalibrated thresholds (>0.65 phishing)     │
+└──────────────────────────────────────────────────┘
 ```
 
----
+## Quick Start
 
-## ⚡ Features
-
-- **95+ AV engine scan** via VirusTotal
-- **Google Safe Browsing** real-time lookup
-- **IPQualityScore** domain reputation, age, DNS validity
-- **Typosquatting detection** — Damerau-Levenshtein distance against 400+ known brands
-- **DGA detection** — character n-gram language model perplexity
-- **Homoglyph detection** — Unicode confusable characters (e.g., Cyrillic ʼpʼ vs Latin 'p')
-- **Shannon entropy** — flags randomly-generated domain names
-- **ML Stacking Ensemble** — 11 models trained on 50k+ URLs, 97.9% accuracy
-- **Adaptive fusion** — weight shifts when fewer APIs are available
-- **Hard overrides** — GSB/VT/IPQS positives guarantee phishing verdict
-
----
-
-## 🚀 Quick Start
-
-### 1. Clone & Install
+### 1. Train the model (Python)
 
 ```bash
-git clone https://github.com/satyakiabhijit/Phishing-Website-Detection.git
-cd Phishing-Website-Detection
-python -m venv .venv
-.venv\Scripts\activate          # Windows
-# source .venv/bin/activate     # macOS/Linux
 pip install -r requirements.txt
+pip install skl2onnx onnxruntime
+
+# Full training + ONNX export + n-gram export
+python training.py --export-onnx --export-ngram
+
+# Or export from existing trained models
+python training.py --onnx-only --export-ngram
 ```
 
-### 2. Add API Keys
-
-Create a `.env` file in the project root:
-
-```env
-VIRUSTOTAL_API_KEY=your_key_here
-GOOGLE_SAFE_BROWSING_API_KEY=your_key_here
-IPQUALITYSCORE_API_KEY=your_key_here
-```
-
-| API | Free Tier | How to Get |
-|-----|-----------|------------|
-| **VirusTotal** | 500 req/day | [virustotal.com/gui/join-us](https://www.virustotal.com/gui/join-us) |
-| **Google Safe Browsing** | 10k req/day | [console.cloud.google.com](https://console.cloud.google.com) → Enable Safe Browsing API |
-| **IPQualityScore** | 200 req/day | [ipqualityscore.com/create-account](https://www.ipqualityscore.com/create-account) |
-
-> ℹ️ The app works without API keys — Layers 1 & 2 are skipped and the ML + Math layers still run with adjusted weights.
-
-### 3. Train the ML Model
+### 2. Export n-gram model to TypeScript
 
 ```bash
-python training.py
+python export_ngram_ts.py
 ```
 
-Training takes **~15–20 minutes** on a typical laptop. Models are saved to `models/`.
-
-### 4. Run the App
+### 3. Deploy the HF Space
 
 ```bash
-streamlit run app.py
+# Copy ONNX model to HF Space directory
+cp models/phishguard.onnx hf_space/
+
+# Upload hf_space/ to a new Hugging Face Space
+# Then set HF_SPACE_URL to the Space URL
 ```
 
-Open [http://localhost:8501](http://localhost:8501) in your browser.
+### 4. Install & Run the Next.js app
 
----
-
-## 🌐 Deploy to Streamlit Cloud
-
-PhishGuard is production-ready for Streamlit Cloud deployment!
-
-### Quick Deploy
-
-1. Push your code to GitHub
-2. Go to [share.streamlit.io](https://share.streamlit.io)
-3. Connect your repository and deploy
-4. Add API keys in the app's Secrets settings (TOML format)
-
-**Detailed deployment guide:** See [DEPLOYMENT.md](DEPLOYMENT.md)
-
-### ⚡ Keep Your App Awake 24/7
-
-Streamlit Cloud's free tier sleeps after 15 minutes of inactivity. We've included a **GitHub Actions workflow** that automatically pings your app every 14 minutes to keep it running!
-
-**Setup (takes 2 minutes):**
-1. Go to your GitHub repo → `Settings` → `Secrets` → `New secret`
-2. Name: `STREAMLIT_APP_URL` | Value: your Streamlit app URL
-3. The workflow runs automatically — check the `Actions` tab to verify
-
-**Full guide with 5 different solutions:** See [KEEP_ALIVE.md](KEEP_ALIVE.md)
-
-### Live Demo
-
-🔗 [Try PhishGuard Live](https://your-app.streamlit.app) (coming soon)
-
----
-
-## 📁 Project Structure
-
-```
-PhishGuard/
-├── app.py                  # Streamlit UI — 4-layer results dashboard
-├── feature_extractor.py    # URL feature extraction + math models
-├── training.py             # ML training pipeline (11 models + stacking)
-├── intelligence.py         # Layer 1 & 2 — API integrations
-├── alexa_top1k.txt         # 400+ top domains for typosquatting detection
-├── dataset_phishing.csv    # 50k+ labeled URLs for training
-├── requirements.txt        # Python dependencies
-├── .env                    # API keys (git-ignored)
-└── models/                 # Trained model files (auto-generated, git-ignored)
+```bash
+cd phishguard-v2
+npm install
+cp .env.local.example .env.local
+# Fill in API keys in .env.local
+npm run dev
 ```
 
----
+### 5. Deploy to Vercel
 
-## 🧠 ML Model Details
-
-| Model | CV AUC |
-|-------|--------|
-| Random Forest | 0.99962 |
-| Gradient Boosting | 0.99963 |
-| Extra Trees | 0.99963 |
-| XGBoost | ~0.9996 |
-| LightGBM | ~0.9996 |
-| SVM | 0.99776 |
-| Neural Network (MLP) | ~0.9990 |
-| **Stacking Ensemble** | **0.9997** |
-
-Test set accuracy: **97.9%** · AUC: **0.9997**
-
----
-
-## ⚙️ How Fusion Works
-
-```
-Final Score = (w_intel × intel_score) + (w_ml × ml_score) + (w_math × math_score)
+```bash
+vercel deploy
 ```
 
-| APIs Available | w_intel | w_ml | w_math |
-|---------------|---------|------|--------|
-| 2–3 APIs | 55% | 25% | 20% |
-| 1 API | 35% | 35% | 30% |
-| 0 APIs | 0% | 55% | 45% |
+Then in Vercel Dashboard:
+- Add all environment variables from `.env.local.example`
+- Set up Vercel KV storage and link to project
 
-**Verdict thresholds:** ≥ 60% → Phishing · ≤ 35% → Legitimate · in between → Uncertain
+## Environment Variables
 
----
+| Variable | Description | Required |
+|----------|------------|----------|
+| `VT_API_KEY` | VirusTotal API key | Yes |
+| `GSB_API_KEY` | Google Safe Browsing v4 | Yes |
+| `IPQS_API_KEY` | IPQualityScore API key | Yes |
+| `HF_SPACE_URL` | Hugging Face Space URL | Yes |
+| `KV_REST_API_URL` | Vercel KV REST API URL | For caching |
+| `KV_REST_API_TOKEN` | Vercel KV token | For caching |
 
-## 📋 Requirements
+## File Structure
 
-- Python 3.10+
-- ~500 MB disk space (for dataset + models)
-- 4 GB RAM recommended for training
+```
+phishguard-v2/
+├── src/
+│   ├── app/
+│   │   ├── page.tsx              ← Landing + analysis page
+│   │   ├── layout.tsx            ← Root layout + SEO
+│   │   └── api/analyze/route.ts  ← Main API endpoint
+│   ├── components/
+│   │   ├── UrlInput.tsx          ← URL input with validation
+│   │   ├── VerdictBadge.tsx      ← Animated verdict display
+│   │   ├── LayerCard.tsx         ← Per-layer result card
+│   │   ├── EvidenceList.tsx      ← Sorted evidence items
+│   │   ├── ConfidenceBar.tsx     ← Horizontal confidence bar
+│   │   ├── LoadingSteps.tsx      ← Sequential loading animation
+│   │   └── RiskGauge.tsx         ← SVG circular gauge
+│   ├── lib/
+│   │   ├── featureExtractor.ts   ← Full TS port of Python extractor
+│   │   ├── ngramModel.ts         ← Character trigram frequencies
+│   │   ├── threatIntelligence.ts ← VT + GSB + IPQS API calls
+│   │   ├── fusion.ts             ← Weighted scoring + verdict
+│   │   ├── whitelist.ts          ← Trusted domains + brands
+│   │   └── types.ts              ← All TypeScript types
+│   └── styles/globals.css
+├── public/alexa_top1k.txt
+├── hf_space/                     ← Upload to HF Spaces
+│   ├── app.py
+│   ├── requirements.txt
+│   └── README.md
+├── training.py                   ← Modified with ONNX export
+├── export_ngram_ts.py            ← N-gram → TypeScript converter
+└── .env.local.example
+```
 
----
+## False Positive Mitigations
 
-## 📄 License
+- **VT threshold**: Requires >2 detections (not >0)
+- **IPQS threshold**: fraud_score >85 (not >75)
+- **Trusted domain bonus**: -0.15 score for cloud infra suffixes
+- **Entropy normalization**: Reduced penalty for trusted subdomains
+- **Tech brand bypass**: Known brands skip perplexity scoring
+- **UUID-aware digit ratio**: UUIDs excluded from digit counting
+- **Typosquat guard**: Exact brand match ≠ impersonation
 
-MIT License — see [LICENSE](LICENSE) for details.
+## License
+
+MIT
