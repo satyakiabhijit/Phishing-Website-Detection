@@ -35,9 +35,12 @@ def predict(feature_json):
         X_df = pd.DataFrame([features], columns=feature_names)
         
         # Transform using DataFrame
-        X_scaled = scaler.transform(X_df)
+        X_scaled_arr = scaler.transform(X_df)
         
-        # Predict using scaled numpy array
+        # Convert back to DataFrame to preserve feature names and suppress UserWarning
+        X_scaled = pd.DataFrame(X_scaled_arr, columns=feature_names)
+        
+        # Predict using scaled DataFrame
         prob = float(model.predict_proba(X_scaled)[0][1])
         pred = int(model.predict(X_scaled)[0])
         
