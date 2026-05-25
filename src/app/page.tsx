@@ -180,6 +180,41 @@ export default function HomePage() {
               </div>
             </div>
 
+            {/* Suggested safe URL redirection alert */}
+            {result.suggestedSafeUrl && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-5 glass-card border border-accent-amber/30 bg-accent-amber/5 flex flex-col md:flex-row items-center justify-between gap-4"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-accent-amber/20 flex items-center justify-center text-lg shrink-0">
+                    🎯
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-text-primary">
+                      Typosquatting Detection Warning!
+                    </h4>
+                    <p className="text-xs text-text-secondary mt-0.5">
+                      This domain name is suspicious and resembles a major brand. Did you mean to go to{" "}
+                      <span className="font-semibold text-accent-green font-mono">
+                        {result.suggestedSafeUrl.replace("https://", "")}
+                      </span>
+                      ?
+                    </p>
+                  </div>
+                </div>
+                <a
+                  href={result.suggestedSafeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 text-xs font-semibold text-bg bg-accent-green hover:bg-accent-green/90 rounded-lg shadow-lg hover:shadow-accent-green/20 flex items-center gap-1.5 transition-all shrink-0"
+                >
+                  🛡️ Redirect to Safe Domain ↗
+                </a>
+              </motion.div>
+            )}
+
             {/* Confidence bar */}
             <ConfidenceBar value={result.confidence} />
 

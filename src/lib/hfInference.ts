@@ -41,10 +41,16 @@ export async function callHFInference(
 
     const parsed = JSON.parse(data[0] as string);
 
+    // INVERSION FIX: The trained ML model outputs [1 = Legitimate, 0 = Phishing] matching the PhiUSIIL dataset.
+    // The Next.js frontend and fusion engine expect [1 = Phishing, 0 = Legitimate].
+    // We invert the prediction and probability to align them perfectly.
+    const alignedPrediction = parsed.prediction === 0 ? 1 : 0;
+    const alignedProbability = 1.0 - parsed.probability;
+
     return {
       available: true,
-      prediction: parsed.prediction,
-      probability: parsed.probability,
+      prediction: alignedPrediction,
+      probability: alignedProbability,
       confidence: parsed.confidence,
       error: parsed.error || null,
     };

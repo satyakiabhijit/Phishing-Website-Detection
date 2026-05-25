@@ -73,6 +73,18 @@ export function computeTyposquatDistance(domain: string, brands: string[]): { br
   if (!brands.length || !domain) return { brand: "", distance: 99, score: 0 };
   const d = domain.toLowerCase().trim();
   if (brands.includes(d)) return { brand: d, distance: 0, score: 0 };
+
+  // 1. Check for brand substring impersonation (e.g. paypal-secure)
+  const isTrusted = ["vercel", "netlify", "github", "googleusercontent", "herokuapp", "amazonaws", "azurewebsites"].some(t => d.includes(t));
+  if (!isTrusted) {
+    for (const brand of brands) {
+      if (d.includes(brand) && d !== brand) {
+        return { brand, distance: 0.5, score: 0.85 };
+      }
+    }
+  }
+
+  // 2. Fallback to Levenshtein distance
   let minDist = 99, closest = "";
   for (const brand of brands) {
     if (Math.abs(d.length - brand.length) > 4) continue;

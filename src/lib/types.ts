@@ -124,6 +124,7 @@ export interface AnalysisResult {
     ml: number;
     math: number;
   };
+  suggestedSafeUrl?: string;
 }
 
 export interface AnalyzeRequest {

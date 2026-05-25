@@ -7,6 +7,74 @@ import { isTrustedDomain, TRUSTED_DOMAIN_BONUS } from "./whitelist";
 import { KNOWN_BRANDS } from "./featureExtractor";
 import type { AnalysisResult, IntelResult, MLResult, MathResult, EvidenceItem, Verdict } from "./types";
 
+const BRAND_DOMAINS: Record<string, string> = {
+  flipkart: "flipkart.com",
+  myntra: "myntra.com",
+  snapdeal: "snapdeal.com",
+  paytm: "paytm.com",
+  phonepe: "phonepe.com",
+  googlepay: "pay.google.com",
+  hdfc: "hdfcbank.com",
+  icici: "icicibank.com",
+  sbi: "onlinesbi.sbi",
+  axis: "axisbank.com",
+  kotak: "kotak.com",
+  google: "google.com",
+  facebook: "facebook.com",
+  amazon: "amazon.com",
+  microsoft: "microsoft.com",
+  apple: "apple.com",
+  netflix: "netflix.com",
+  paypal: "paypal.com",
+  instagram: "instagram.com",
+  twitter: "twitter.com",
+  linkedin: "linkedin.com",
+  yahoo: "yahoo.com",
+  ebay: "ebay.com",
+  walmart: "walmart.com",
+  target: "target.com",
+  chase: "chase.com",
+  bankofamerica: "bankofamerica.com",
+  wellsfargo: "wellsfargo.com",
+  citibank: "citibank.com",
+  americanexpress: "americanexpress.com",
+  github: "github.com",
+  gitlab: "gitlab.com",
+  stackoverflow: "stackoverflow.com",
+  reddit: "reddit.com",
+  youtube: "youtube.com",
+  gmail: "mail.google.com",
+  dropbox: "dropbox.com",
+  spotify: "spotify.com",
+  adobe: "adobe.com",
+  salesforce: "salesforce.com",
+  oracle: "oracle.com",
+  whatsapp: "whatsapp.com",
+  telegram: "telegram.org",
+  discord: "discord.com",
+  slack: "slack.com",
+  zoom: "zoom.us",
+  teams: "teams.microsoft.com",
+  openai: "openai.com",
+  anthropic: "anthropic.com",
+  claude: "claude.ai",
+  notion: "notion.so",
+  figma: "figma.com",
+  canva: "canva.com",
+  trello: "trello.com",
+  asana: "asana.com",
+  stripe: "stripe.com",
+  shopify: "shopify.com",
+  coinbase: "coinbase.com",
+  binance: "binance.com",
+  revolut: "revolut.com",
+  nubank: "nubank.com.br",
+  wise: "wise.com",
+  venmo: "venmo.com",
+  cashapp: "cash.app",
+  zelle: "zellepay.com",
+};
+
 export function fuseAnalysis(
   url: string,
   normalizedUrl: string,
@@ -49,9 +117,16 @@ export function fuseAnalysis(
   }
 
   // Critical heuristics (Overrides)
-  if (math.typosquatResult.score > 0.9 && !KNOWN_BRANDS.includes(parsed.hostname.replace("www.", "").split(".")[0])) {
-    // If it is an extreme typosquat (distance 1) of a known brand, but NOT the legitimate brand itself
-    finalScore = Math.max(finalScore, 0.75); // Auto-bump to Phishing/Suspicious
+  const mainDomainWord = parsed.hostname.replace("www.", "").split(".")[0];
+  const isOriginalBrand = KNOWN_BRANDS.includes(mainDomainWord);
+  if (!isOriginalBrand) {
+    if (math.typosquatResult.score >= 0.85) {
+      // Distance 1 or Brand Spoofing (e.g. paypa1.com, paypal-secure.tk)
+      finalScore = Math.max(finalScore, 0.85); // Auto-bump to Phishing
+    } else if (math.typosquatResult.score > 0.5) {
+      // Distance 2: High-probability typosquat (e.g. flikar.in)
+      finalScore = Math.max(finalScore, 0.72); // Auto-bump to Suspicious/Phishing
+    }
   }
   if (math.homoglyphs && math.homoglyphs.detected) {
     finalScore = Math.max(finalScore, 0.85); // Auto-bump to Phishing
@@ -81,14 +156,28 @@ export function fuseAnalysis(
     evidence.push({ id: "ml_phish", source: "ml", severity: "high", title: "AI Detection Engine", description: `Ensemble models detected patterns common in phishing pages with ${(ml.probability * 100).toFixed(1)}% probability.`, icon: "🤖" });
   }
 
-  if (math.typosquatResult.score > 0.8) {
-    evidence.push({ id: "typo_brand", source: "math", severity: "medium", title: "Brand Impersonation", description: `This domain is a close match to "${math.typosquatResult.brand}", suggesting a typosquatting attempt.`, icon: "🎯" });
+  if (math.typosquatResult.score > 0.5) {
+    const isDistance1 = math.typosquatResult.score > 0.8;
+    evidence.push({ 
+      id: "typo_brand", 
+      source: "math", 
+      severity: isDistance1 ? "critical" : "high", 
+      title: "Brand Impersonation", 
+      description: `This domain is a close match to "${math.typosquatResult.brand}" (edit-distance ${math.typosquatResult.distance}), suggesting a typosquatting attempt.`, 
+      icon: "🎯" 
+    });
   }
   if (math.homoglyphs && math.homoglyphs.detected) {
     evidence.push({ id: "homoglyph", source: "math", severity: "high", title: "Homoglyph Detected", description: "The domain uses look-alike characters from different alphabets to deceive users.", icon: "🔤" });
   }
   if (math.perplexityScore > 0.7) {
     evidence.push({ id: "perplexity", source: "math", severity: "medium", title: "Unusual Domain Name", description: "The domain name has low linguistic probability, common in auto-generated phishing domains.", icon: "🔬" });
+  }
+
+  let suggestedSafeUrl: string | undefined = undefined;
+  if (math.typosquatResult.score > 0.5 && !isOriginalBrand && math.typosquatResult.brand) {
+    const safeDomain = BRAND_DOMAINS[math.typosquatResult.brand.toLowerCase()] || `${math.typosquatResult.brand.toLowerCase()}.com`;
+    suggestedSafeUrl = `https://${safeDomain}`;
   }
 
   return {
@@ -103,5 +192,6 @@ export function fuseAnalysis(
     layers: { intel, ml, math },
     evidence,
     weights: normalizedWeights,
+    suggestedSafeUrl,
   };
 }
