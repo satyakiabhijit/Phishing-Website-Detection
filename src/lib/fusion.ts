@@ -119,25 +119,36 @@ export function fuseAnalysis(
   // Critical heuristics (Overrides)
   const mainDomainWord = parsed.hostname.replace("www.", "").split(".")[0];
   const isOriginalBrand = KNOWN_BRANDS.includes(mainDomainWord);
-  if (!isOriginalBrand) {
-    if (math.typosquatResult.score >= 0.85) {
-      // Distance 1 or Brand Spoofing (e.g. paypa1.com, paypal-secure.tk)
-      finalScore = Math.max(finalScore, 0.85); // Auto-bump to Phishing
-    } else if (math.typosquatResult.score > 0.5) {
-      // Distance 2: High-probability typosquat (e.g. flikar.in)
-      finalScore = Math.max(finalScore, 0.72); // Auto-bump to Suspicious/Phishing
-    }
-  }
-  if (math.homoglyphs && math.homoglyphs.detected) {
-    finalScore = Math.max(finalScore, 0.85); // Auto-bump to Phishing
-  }
+  // 1. Hard Legitimate Bypass for Official Brand Domains (Prevents False Positives on major brands)
+  const officialDomain = BRAND_DOMAINS[mainDomainWord.toLowerCase()];
+  const isOfficialBrandDomain = officialDomain && (
+    parsed.hostname.toLowerCase() === officialDomain.toLowerCase() ||
+    parsed.hostname.toLowerCase() === `www.${officialDomain}`.toLowerCase()
+  );
 
-  // ML Overrides (Zero-Day Phishing Safeguard)
-  if (ml && ml.available && !isTrustedDomain(parsed.hostname)) {
-    if (ml.probability > 0.95) {
+  if (isOfficialBrandDomain) {
+    finalScore = 0.0; // Guaranteed safe
+  } else {
+    if (!isOriginalBrand) {
+      if (math.typosquatResult.score >= 0.85) {
+        // Distance 1 or Brand Spoofing (e.g. paypa1.com, paypal-secure.tk)
+        finalScore = Math.max(finalScore, 0.85); // Auto-bump to Phishing
+      } else if (math.typosquatResult.score > 0.5) {
+        // Distance 2: High-probability typosquat (e.g. flikar.in)
+        finalScore = Math.max(finalScore, 0.72); // Auto-bump to Suspicious/Phishing
+      }
+    }
+    if (math.homoglyphs && math.homoglyphs.detected) {
       finalScore = Math.max(finalScore, 0.85); // Auto-bump to Phishing
-    } else if (ml.probability > 0.80) {
-      finalScore = Math.max(finalScore, 0.70); // Auto-bump to Suspicious/Phishing
+    }
+
+    // ML Overrides (Zero-Day Phishing Safeguard)
+    if (ml && ml.available && !isTrustedDomain(parsed.hostname)) {
+      if (ml.probability > 0.95) {
+        finalScore = Math.max(finalScore, 0.85); // Auto-bump to Phishing
+      } else if (ml.probability > 0.80) {
+        finalScore = Math.max(finalScore, 0.70); // Auto-bump to Suspicious/Phishing
+      }
     }
   }
 
