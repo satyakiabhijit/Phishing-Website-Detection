@@ -132,6 +132,15 @@ export function fuseAnalysis(
     finalScore = Math.max(finalScore, 0.85); // Auto-bump to Phishing
   }
 
+  // ML Overrides (Zero-Day Phishing Safeguard)
+  if (ml && ml.available && !isTrustedDomain(parsed.hostname)) {
+    if (ml.probability > 0.95) {
+      finalScore = Math.max(finalScore, 0.85); // Auto-bump to Phishing
+    } else if (ml.probability > 0.80) {
+      finalScore = Math.max(finalScore, 0.70); // Auto-bump to Suspicious/Phishing
+    }
+  }
+
   // Determine verdict
   let verdict: Verdict = "Uncertain";
   if (finalScore >= 0.85) verdict = "Phishing";
