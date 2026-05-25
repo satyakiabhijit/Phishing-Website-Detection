@@ -3,7 +3,7 @@
 // Combines Intel, ML, and Math layers into a final verdict
 // ═══════════════════════════════════════════════════════════
 
-import { isTrustedDomain, TRUSTED_DOMAIN_BONUS } from "./whitelist";
+import { isTrustedDomain, isRegulatedInstitutionalDomain, TRUSTED_DOMAIN_BONUS } from "./whitelist";
 import { KNOWN_BRANDS } from "./featureExtractor";
 import type { AnalysisResult, IntelResult, MLResult, MathResult, EvidenceItem, Verdict } from "./types";
 
@@ -138,7 +138,7 @@ export function fuseAnalysis(
 
   const isOriginalBrand = matchedBrandWord !== "" || KNOWN_BRANDS.some(b => hostnameWithoutWww.includes(b));
 
-  if (isOfficialBrandDomain) {
+  if (isOfficialBrandDomain || isRegulatedInstitutionalDomain(parsed.hostname)) {
     finalScore = 0.0; // Guaranteed safe
     // Correct the ML False Positive visually so the UI doesn't confuse the user
     if (ml && ml.available) {
