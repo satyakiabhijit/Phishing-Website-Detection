@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhishGuard — Presentation Q&A Prep</title>
+    <meta name="description" content="Comprehensive Q&A preparation guide for PhishGuard: Phishing URL Detection using ML Stacking Ensemble">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Animated background -->
+    <div class="bg-grid"></div>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+    <div class="bg-glow bg-glow-3"></div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-inner">
+            <div class="logo">
+                <span class="logo-icon">🛡️</span>
+                <div>
+                    <h1 class="logo-title">PhishGuard</h1>
+                    <p class="logo-sub">Presentation Q&A Prep</p>
+                </div>
+            </div>
+            <div class="header-meta">
+                <span class="badge badge-accent">Last Year Project</span>
+                <span class="badge badge-info">Satyaki Abhijit</span>
+                <span class="badge badge-success" id="qCount">75 Questions</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div class="hero-content">
+            <div class="hero-tag">VIVA & PRESENTATION PREPARATION</div>
+            <h2 class="hero-title">
+                Every Question You Could Be Asked
+                <span class="gradient-text">— Answered</span>
+            </h2>
+            <p class="hero-desc">
+                From "What dataset did you use?" to "Why stacking over bagging?" — 
+                a complete, searchable guide covering <strong>every detail</strong> of the PhishGuard project.
+            </p>
+            <div class="search-box">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                <input type="text" id="searchInput" placeholder="Search any question... (e.g. 'dataset', 'feature', 'accuracy')" autocomplete="off">
+                <kbd class="search-kbd">Ctrl+K</kbd>
+            </div>
+        </div>
+        <div class="hero-stats">
+            <div class="stat-card">
+                <div class="stat-num">12</div>
+                <div class="stat-label">Categories</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num" id="totalQ">75</div>
+                <div class="stat-label">Questions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num">99.79%</div>
+                <div class="stat-label">Accuracy</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-num">21</div>
+                <div class="stat-label">Features</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Category Filter -->
+    <section class="filter-section">
+        <div class="filter-bar">
+            <button class="filter-btn active" data-cat="all">
+                <span class="filter-icon">📋</span> All
+            </button>
+            <button class="filter-btn" data-cat="project-overview">
+                <span class="filter-icon">🎯</span> Project Overview
+            </button>
+            <button class="filter-btn" data-cat="dataset">
+                <span class="filter-icon">📊</span> Dataset
+            </button>
+            <button class="filter-btn" data-cat="data-leakage">
+                <span class="filter-icon">🚨</span> Data Leakage
+            </button>
+            <button class="filter-btn" data-cat="features">
+                <span class="filter-icon">🧮</span> Feature Engineering
+            </button>
+            <button class="filter-btn" data-cat="models">
+                <span class="filter-icon">🤖</span> ML Models
+            </button>
+            <button class="filter-btn" data-cat="stacking">
+                <span class="filter-icon">🏗️</span> Stacking Ensemble
+            </button>
+            <button class="filter-btn" data-cat="results">
+                <span class="filter-icon">📈</span> Results & Metrics
+            </button>
+            <button class="filter-btn" data-cat="preprocessing">
+                <span class="filter-icon">⚙️</span> Preprocessing
+            </button>
+            <button class="filter-btn" data-cat="comparison">
+                <span class="filter-icon">⚔️</span> Comparison
+            </button>
+            <button class="filter-btn" data-cat="deployment">
+                <span class="filter-icon">🚀</span> Deployment
+            </button>
+            <button class="filter-btn" data-cat="limitations">
+                <span class="filter-icon">⚠️</span> Limitations & Future
+            </button>
+            <button class="filter-btn" data-cat="technical-deep">
+                <span class="filter-icon">🔬</span> Technical Deep-Dive
+            </button>
+        </div>
+    </section>
+
+    <!-- Q&A Container -->
+    <main class="qa-container" id="qaContainer">
+        <!-- Questions will be injected by JS -->
+    </main>
+
+    <!-- Quick Reference Panel -->
+    <section class="quick-ref">
+        <h2 class="section-title">📌 Quick Reference — Key Numbers to Remember</h2>
+        <div class="ref-grid">
+            <div class="ref-card">
+                <div class="ref-label">Dataset</div>
+                <div class="ref-value">PhiUSIIL</div>
+                <div class="ref-detail">235,795 URLs</div>
+            </div>
+            <div class="ref-card">
+                <div class="ref-label">Legitimate</div>
+                <div class="ref-value">100,945</div>
+                <div class="ref-detail">42.8%</div>
+            </div>
+            <div class="ref-card">
+                <div class="ref-label">Phishing</div>
+                <div class="ref-value">134,850</div>
+                <div class="ref-detail">57.2%</div>
+            </div>
+            <div class="ref-card">
+                <div class="ref-label">Features Used</div>
+                <div class="ref-value">21</div>
+                <div class="ref-detail">URL-only</div>
+            </div>
+            <div class="ref-card">
+                <div class="ref-label">Leaked Features Removed</div>
+                <div class="ref-value">29</div>
+                <div class="ref-detail">Page-content</div>
+            </div>
+            <div class="ref-card">
+                <div class="ref-label">Train / Test</div>
+                <div class="ref-value">80 / 20</div>
+                <div class="ref-detail">188,636 / 47,159</div>
+            </div>
+            <div class="ref-card highlight">
+                <div class="ref-label">Accuracy</div>
+                <div class="ref-value">99.79%</div>
+                <div class="ref-detail">Stacking Ensemble</div>
+            </div>
+            <div class="ref-card highlight">
+                <div class="ref-label">AUC-ROC</div>
+                <div class="ref-value">99.90%</div>
+                <div class="ref-detail">Near-perfect</div>
+            </div>
+            <div class="ref-card highlight">
+                <div class="ref-label">F1-Score</div>
+                <div class="ref-value">99.81%</div>
+                <div class="ref-detail">Balanced</div>
+            </div>
+            <div class="ref-card">
+                <div class="ref-label">False Negatives</div>
+                <div class="ref-value">8</div>
+                <div class="ref-detail">Out of 26,970</div>
+            </div>
+            <div class="ref-card">
+                <div class="ref-label">FNR</div>
+                <div class="ref-value">0.030%</div>
+                <div class="ref-detail">Critical metric</div>
+            </div>
+            <div class="ref-card">
+                <div class="ref-label">Inference</div>
+                <div class="ref-value">&lt;50ms</div>
+                <div class="ref-detail">Per URL</div>
+            </div>
+            <div class="ref-card">
+                <div class="ref-label">Base Classifiers</div>
+                <div class="ref-value">5</div>
+                <div class="ref-detail">RF, XGB, LGB, MLP, LR</div>
+            </div>
+            <div class="ref-card">
+                <div class="ref-label">Meta-Classifier</div>
+                <div class="ref-value">LR</div>
+                <div class="ref-detail">Logistic Regression</div>
+            </div>
+            <div class="ref-card">
+                <div class="ref-label">CV Folds</div>
+                <div class="ref-value">5</div>
+                <div class="ref-detail">Stratified K-Fold</div>
+            </div>
+            <div class="ref-card">
+                <div class="ref-label">Scaler</div>
+                <div class="ref-value">Robust</div>
+                <div class="ref-detail">Outlier resistant</div>
+            </div>
+            <div class="ref-card">
+                <div class="ref-label">Top Feature</div>
+                <div class="ref-value">IsHTTPS</div>
+                <div class="ref-detail">36.29% importance</div>
+            </div>
+            <div class="ref-card">
+                <div class="ref-label">Tech Stack</div>
+                <div class="ref-value">Next.js 14</div>
+                <div class="ref-detail">+ Python + ONNX</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-inner">
+            <p>PhishGuard — Satyaki Abhijit | Department of Computer Science and Engineering</p>
+            <p class="footer-sub">Presentation Q&A Preparation Guide • 2026</p>
+        </div>
+    </footer>
+
+    <script src="questions.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
