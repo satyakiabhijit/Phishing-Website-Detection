@@ -55,6 +55,9 @@ const BRAND_DOMAINS: Record<string, string> = {
   slack: "slack.com",
   zoom: "zoom.us",
   teams: "teams.microsoft.com",
+  live: "live.com",
+  office: "office.com",
+  microsoftonline: "microsoftonline.com",
   openai: "openai.com",
   anthropic: "anthropic.com",
   claude: "claude.ai",
@@ -117,17 +120,32 @@ export function fuseAnalysis(
   }
 
   // Critical heuristics (Overrides)
-  const mainDomainWord = parsed.hostname.replace("www.", "").split(".")[0];
-  const isOriginalBrand = KNOWN_BRANDS.includes(mainDomainWord);
-  // 1. Hard Legitimate Bypass for Official Brand Domains (Prevents False Positives on major brands)
-  const officialDomain = BRAND_DOMAINS[mainDomainWord.toLowerCase()];
-  const isOfficialBrandDomain = officialDomain && (
-    parsed.hostname.toLowerCase() === officialDomain.toLowerCase() ||
-    parsed.hostname.toLowerCase() === `www.${officialDomain}`.toLowerCase()
-  );
+  const hostnameWithoutWww = parsed.hostname.toLowerCase().replace(/^www\./, "");
+  
+  let isOfficialBrandDomain = false;
+  let matchedBrandWord = "";
+
+  for (const [brandWord, officialDomain] of Object.entries(BRAND_DOMAINS)) {
+    if (
+      hostnameWithoutWww === officialDomain.toLowerCase() ||
+      hostnameWithoutWww.endsWith("." + officialDomain.toLowerCase())
+    ) {
+      isOfficialBrandDomain = true;
+      matchedBrandWord = brandWord;
+      break;
+    }
+  }
+
+  const isOriginalBrand = matchedBrandWord !== "" || KNOWN_BRANDS.some(b => hostnameWithoutWww.includes(b));
 
   if (isOfficialBrandDomain) {
     finalScore = 0.0; // Guaranteed safe
+    // Correct the ML False Positive visually so the UI doesn't confuse the user
+    if (ml && ml.available) {
+      ml.prediction = 0;
+      ml.probability = 0.0;
+      ml.confidence = 0.99;
+    }
   } else {
     if (!isOriginalBrand) {
       if (math.typosquatResult.score >= 0.85) {

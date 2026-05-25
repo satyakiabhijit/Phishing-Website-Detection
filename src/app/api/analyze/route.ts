@@ -33,11 +33,13 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Check Cache
-    try {
-      const cached = await kv.get(`analysis:${normalizedUrl}`);
-      if (cached) return NextResponse.json({ ...cached as any, cached: true });
-    } catch (e) {
-      console.warn("KV Cache error:", e);
+    if (process.env.NODE_ENV !== "development") {
+      try {
+        const cached = await kv.get(`analysis:${normalizedUrl}`);
+        if (cached) return NextResponse.json({ ...cached as any, cached: true });
+      } catch (e) {
+        console.warn("KV Cache error:", e);
+      }
     }
 
     // 2. Run Analysis Layers in Parallel

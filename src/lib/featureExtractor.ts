@@ -20,6 +20,7 @@ export const KNOWN_BRANDS: string[] = [
   "slack","zoom","teams","openai","anthropic","claude","notion",
   "figma","canva","trello","asana","stripe","shopify","coinbase",
   "binance","revolut","nubank","wise","venmo","cashapp","zelle",
+  "live","office","microsoftonline",
 ];
 
 const TLD_LEGIT_PROB: Record<string, number> = {
